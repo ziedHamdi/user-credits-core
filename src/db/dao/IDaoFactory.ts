@@ -1,4 +1,10 @@
-import { IMinimalId, IOffer, IOrder, ITokenTimetable, IUserCredits } from "../model";
+import {
+  IMinimalId,
+  IOffer,
+  IOrder,
+  ITokenTimetable,
+  IUserCredits,
+} from "../model";
 import {
   IOfferDao,
   IOrderDao,
