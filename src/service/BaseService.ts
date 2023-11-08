@@ -257,7 +257,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     offerId: K,
   ): Promise<IOrder<K> | null> {
     // existingSubscription
-    return  await this.orderDao.findOne({
+    return await this.orderDao.findOne({
       offerId: offerId,
       status: "paid",
       userId: userId, // You may want to adjust this based on your criteria
