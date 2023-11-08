@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "declaration": true,
+    "outDir": "dist",
+    "module": "ESNext"
+  },
+  "baseUrl": ".",
+  "exclude": ["coverage", "dist", "node_modules", "test"],
+  "extends": "@tsconfig/recommended/tsconfig.json",
+  "include": ["src/**/*"]
+}
