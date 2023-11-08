@@ -1,13 +1,5 @@
 import { IMinimalId, IOrder } from "../db/model";
 
-export interface WebhookEventPayload {
-  body: string;
-  headers: {
-    "stripe-signature": string;
-    // Other header properties if necessary
-  };
-  // Other properties of the payload
-}
 /**
  * Interface for a payment client that abstracts out payment operations, allowing the UserCredits library to remain
  * framework-agnostic.

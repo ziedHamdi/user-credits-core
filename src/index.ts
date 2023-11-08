@@ -10,3 +10,4 @@ export type * from "./db/dao/index";
 export type * from "./db/model/index";
 export * from "./errors/index";
 export type * from "./service/index";
+export * from "./util/index";
