@@ -1,5 +1,5 @@
-import {IMinimalId, IOrder} from "../db/model";
-import {IWebhookEventPayload} from "./IWebhookEventPayload";
+import { IMinimalId, IOrder } from "../db/model";
+import { IWebhookEventPayload } from "./IWebhookEventPayload";
 
 /**
  * Interface for a payment client that abstracts out payment operations, allowing the UserCredits library to remain
@@ -53,5 +53,8 @@ export interface IPaymentClient<K extends IMinimalId> {
    * @param eventPayload The payload of the incoming webhook event.
    * @param webhookSecret The secret key used for validating the webhook payload.
    */
-  handleWebhook(eventPayload: IWebhookEventPayload, webhookSecret: string): void;
+  handleWebhook(
+    eventPayload: IWebhookEventPayload,
+    webhookSecret: string,
+  ): void;
 }
