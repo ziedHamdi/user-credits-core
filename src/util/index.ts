@@ -1,2 +1,2 @@
-export * from "./Dates"
-export * from "./Copy"
+export * from "./Copy";
+export * from "./Dates";
