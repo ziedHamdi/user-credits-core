@@ -9,6 +9,6 @@
 export type * from "./db/dao/types";
 export type * from "./db/model/types";
 export * from "./errors/index";
-export type * from "./service/types";
 export * from "./service/index";
+export type * from "./service/types";
 export * from "./util/index";

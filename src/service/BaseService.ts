@@ -5,6 +5,7 @@ import type {
   ITokenTimetableDao,
   IUserCreditsDao,
 } from "../db/dao/types";
+import { OfferCycle } from "../db/model/IOffer";
 import type {
   IMinimalId,
   IOffer,
@@ -13,9 +14,14 @@ import type {
   ITokenTimetable,
   IUserCredits,
 } from "../db/model/types";
-import { OfferCycle } from "../db/model/IOffer";
 import { InvalidOrderError, PaymentError } from "../errors";
-import { defaultCustomEquals, addDays, addMonths, addSeconds, addYears } from "../util";
+import {
+  addDays,
+  addMonths,
+  addSeconds,
+  addYears,
+  defaultCustomEquals,
+} from "../util";
 import type { IService } from "./IService";
 
 export abstract class BaseService<K extends IMinimalId> implements IService<K> {

@@ -6,8 +6,10 @@ import type {
   ISubscription,
   IUserCredits,
 } from "../db/model/types";
-import { EntityNotFoundError, PaymentError,
+import {
+  EntityNotFoundError,
   InvalidPaymentError,
+  PaymentError,
   PaymentErrorCode,
   PaymentErrorDetails,
 } from "../errors";
