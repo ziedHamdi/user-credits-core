@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { IMinimalId } from "../model";
+import type { IMinimalId } from "../model/types";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export interface IFindOffersParams<K extends IMinimalId> {

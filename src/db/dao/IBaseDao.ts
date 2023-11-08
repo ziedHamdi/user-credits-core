@@ -1,4 +1,4 @@
-import { IMinimalId } from "../model";
+import type { IMinimalId } from "../model/types";
 
 /**
  * Used to group common DAO operations as in ORM frameworks

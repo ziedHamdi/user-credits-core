@@ -1,4 +1,4 @@
-// index.ts
+// types.ts
 
 export type { IBaseDao } from "./IBaseDao";
 export type { IDaoFactory } from "./IDaoFactory";

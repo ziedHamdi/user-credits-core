@@ -1,5 +1,5 @@
-import { IDaoFactory } from "../db/dao";
-import { IMinimalId, IOffer, IOrder, IUserCredits } from "../db/model";
+import type { IDaoFactory } from "../db/dao/types";
+import type { IMinimalId, IOffer, IOrder, IUserCredits } from "../db/model/types";
 
 /**
  * This is the main interface for the UserCredits library, allowing clients to interact with pay-as-you-go features.

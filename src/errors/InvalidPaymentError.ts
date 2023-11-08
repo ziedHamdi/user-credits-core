@@ -1,4 +1,4 @@
-import { IMinimalId } from "../db/model";
+import type { IMinimalId } from "../db/model/types";
 import { PaymentError } from "./PaymentError";
 
 export enum PaymentErrorCode {

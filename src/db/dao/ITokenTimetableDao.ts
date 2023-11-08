@@ -1,5 +1,5 @@
-import { IMinimalId, ITokenTimetable } from "../model";
-import { IBaseDao } from "./IBaseDao";
+import type { IMinimalId, ITokenTimetable } from "../model/types";
+import type { IBaseDao } from "./IBaseDao";
 
 export interface ITokenTimetableDao<
   K extends IMinimalId,

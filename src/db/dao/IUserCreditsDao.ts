@@ -1,5 +1,5 @@
-import { IMinimalId, IUserCredits } from "../model";
-import { IBaseDao } from "./IBaseDao";
+import type { IMinimalId, IUserCredits } from "../model/types";
+import type { IBaseDao } from "./IBaseDao";
 
 export interface IUserCreditsDao<
   K extends IMinimalId,

@@ -1,4 +1,4 @@
-import { IMinimalId, IOrder } from "../db/model";
+import type { IMinimalId, IOrder } from "../db/model/types";
 
 export class AlreadySubscribedError<K extends IMinimalId> extends Error {
   conflictingOrder: IOrder<K> | null;

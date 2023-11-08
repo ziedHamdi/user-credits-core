@@ -1,6 +1,6 @@
-import type { IMinimalId, IOffer } from "../model";
+import type { IMinimalId, IOffer } from "../model/types";
 import type { IBaseDao } from "./IBaseDao";
-import { IFindOffersParams } from "./IFindOffersParams";
+import type { IFindOffersParams } from "./IFindOffersParams";
 
 export interface IOfferDao<K extends IMinimalId, D extends IOffer<K>>
   extends IBaseDao<K, D> {

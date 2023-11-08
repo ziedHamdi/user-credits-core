@@ -1,5 +1,5 @@
-import { IMinimalId, IOrder } from "../db/model";
-import { IWebhookEventPayload } from "./IWebhookEventPayload";
+import type { IMinimalId, IOrder } from "../db/model/types";
+import type { IWebhookEventPayload } from "./IWebhookEventPayload";
 
 /**
  * Interface for a payment client that abstracts out payment operations, allowing the UserCredits library to remain

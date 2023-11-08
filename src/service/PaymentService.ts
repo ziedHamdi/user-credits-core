@@ -1,19 +1,18 @@
-import { IDaoFactory } from "../db/dao";
-import {
+import type { IDaoFactory } from "../db/dao/types";
+import type {
   IActivatedOffer,
   IMinimalId,
   IOrder,
   ISubscription,
   IUserCredits,
-} from "../db/model";
-import { EntityNotFoundError, PaymentError } from "../errors";
-import {
+} from "../db/model/types";
+import { EntityNotFoundError, PaymentError,
   InvalidPaymentError,
   PaymentErrorCode,
   PaymentErrorDetails,
-} from "../errors/InvalidPaymentError";
+} from "../errors";
 import { BaseService } from "./BaseService";
-import { IPaymentClient } from "./IPaymentClient";
+import type { IPaymentClient } from "./IPaymentClient";
 
 export class PaymentService<K extends IMinimalId> extends BaseService<K> {
   constructor(

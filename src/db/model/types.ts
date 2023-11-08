@@ -1,4 +1,4 @@
-// index.ts
+// types.ts
 
 export type { IActivatedOffer } from "./IActivatedOffer";
 export type { IBaseEntity } from "./IBaseEntity";

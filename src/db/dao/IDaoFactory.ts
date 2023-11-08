@@ -1,16 +1,16 @@
-import {
+import type {
   IMinimalId,
   IOffer,
   IOrder,
   ITokenTimetable,
   IUserCredits,
-} from "../model";
-import {
+} from "../model/types";
+import type {
   IOfferDao,
   IOrderDao,
   ITokenTimetableDao,
   IUserCreditsDao,
-} from "./index";
+} from "./types";
 
 export interface IDaoFactory<K extends IMinimalId> {
   getOfferDao(): IOfferDao<K, IOffer<K>>;

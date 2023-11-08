@@ -1,23 +1,22 @@
-import {
+import type {
   IDaoFactory,
   IOfferDao,
   IOrderDao,
   ITokenTimetableDao,
   IUserCreditsDao,
-} from "../db/dao";
-import {
+} from "../db/dao/types";
+import type {
   IMinimalId,
   IOffer,
   IOrder,
   ISubscription,
   ITokenTimetable,
   IUserCredits,
-} from "../db/model";
+} from "../db/model/types";
 import { OfferCycle } from "../db/model/IOffer";
 import { InvalidOrderError, PaymentError } from "../errors";
-import { defaultCustomEquals } from "../util/Copy";
-import { addDays, addMonths, addSeconds, addYears } from "../util/Dates";
-import { IService } from "./IService";
+import { defaultCustomEquals, addDays, addMonths, addSeconds, addYears } from "../util";
+import type { IService } from "./IService";
 
 export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   protected daoFactory: IDaoFactory<K>;
