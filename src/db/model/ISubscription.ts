@@ -1,6 +1,6 @@
 import { IBaseEntity } from "./IBaseEntity";
 import { IMinimalId } from "./IMinimalId";
-import { OfferCycle } from "./IOffer";
+import { IOfferCycle } from "./IOffer";
 
 /**
  * Interface representing a subscription.
@@ -15,7 +15,7 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
   /**
    * The cycle of the subscription (e.g., 'once', 'weekly', 'monthly', etc.).
    */
-  cycle: OfferCycle;
+  cycle: IOfferCycle;
   name: string;
   /**
    * The grouping of offers belonging to the same service.

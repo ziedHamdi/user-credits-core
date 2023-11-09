@@ -1,6 +1,6 @@
 import { IBaseEntity } from "./IBaseEntity";
 import { IMinimalId } from "./IMinimalId";
-import { OfferCycle } from "./IOffer";
+import { IOfferCycle } from "./IOffer";
 import { IOrderStatus } from "./IOrderStatus";
 
 /**
@@ -11,7 +11,7 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
   createdAt: Date;
   currency: string;
   customCycle: number | null;
-  cycle: OfferCycle;
+  cycle: IOfferCycle;
   history: [IOrderStatus] | null;
   /** Check documentation in @IOffer */
   offerGroup: string;

@@ -5,7 +5,7 @@ import type {
   ITokenTimetableDao,
   IUserCreditsDao,
 } from "../db/dao/types";
-import { OfferCycle } from "../db/model/IOffer";
+import { IOfferCycle } from "../db/model/IOffer";
 import type {
   IMinimalId,
   IOffer,
@@ -285,7 +285,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
   protected calculateExpiryDate(
     startDate: Date,
-    cycle: OfferCycle,
+    cycle: IOfferCycle,
     quantity: number = 1,
     customCycle?: number,
   ): Date {

@@ -1,7 +1,7 @@
 import { IBaseEntity } from "./IBaseEntity";
 import { IMinimalId } from "./IMinimalId";
 
-export type OfferCycle =
+export type IOfferCycle =
   | "once"
   | "daily"
   | "weekly"
@@ -33,7 +33,7 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
   /**
    * Specifies how often the offer has to be renewed.
    */
-  cycle: OfferCycle;
+  cycle: IOfferCycle;
   /**
    * If true, signals that it unlocks other offers when purchased: check the {@link unlockedBy} field.
    */
