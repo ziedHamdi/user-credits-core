@@ -7,6 +7,10 @@
     "outDir": "dist",
     "module": "ESNext"
   },
+  "tsc-alias": {
+    "resolveFullPaths": true,
+    "verbose": false
+  },
   "baseUrl": ".",
   "exclude": ["coverage", "dist", "node_modules", "test"],
   "extends": "@tsconfig/recommended/tsconfig.json",

@@ -2,7 +2,7 @@
   "name": "@user-credits/core",
   "author": "Zied Hamdi",
   "type": "module",
-  "version": "0.12.06-alpha",
+  "version": "0.12.09-alpha",
   "license": "MIT",
   "keywords": [
     "user-credits",
@@ -27,8 +27,8 @@
     "dist"
   ],
   "scripts": {
-    "buildX": "rm -rf ./dist && npx tsc",
-    "build": "rmdir /s /q .\\dist & npx tsc",
+    "buildX": "rm -rf ./dist && npx tsc && tsc-alias",
+    "build": "rmdir /s /q .\\dist & npx tsc & tsc-alias",
     "buildTrace": "rmdir /s /q .\\dist & npx tsc --traceResolution",
     "lint": "npx eslint --fix .",
     "test": "echo \"No tests to run\"",
@@ -46,6 +46,7 @@
     "eslint-plugin-sort-keys-fix": "^1.1.2",
     "eslint-plugin-typescript-sort-keys": "^3.0.0",
     "prettier": "^3.0.3",
+    "tsc-alias": "1.8.8",
     "typescript": "^5.2.2"
   },
   "engines": {
