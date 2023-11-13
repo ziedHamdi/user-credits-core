@@ -1,9 +1,10 @@
-# UserCredits
+# user-credits-core
 
-UserCredits is an open-source library designed to simplify the implementation of pay-as-you-go features in your web or mobile applications. Whether you're building a subscription-based service, a digital marketplace, or an e-commerce platform, UserCredits provides a flexible and technology-agnostic solution to manage user credits and token-based payments.
+@user-credits is an open-source library designed to simplify the implementation of pay-as-you-go features in your web or mobile applications. Whether you're building a subscription-based service, a digital marketplace, or an e-commerce platform, UserCredits provides a flexible and technology-agnostic solution to manage user credits and token-based payments.
 
 # Core package
-This package is published under @use-credits/core
+This package is published under [@use-credits/core](https://www.npmjs.com/package/@user-credits/core). It doesn't have any dependency; it only contains the core concept interfaces and basic database-payment-agnostic implementation services. 
+You can find a mongoose + stripe implementation [here](https://www.npmjs.com/package/@user-credits/stripe-mongoose)
 
 ## Getting started guide
 To understand how offers are declared, orders executed and payments tracked a fully explained guide is available:
