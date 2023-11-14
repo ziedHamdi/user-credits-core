@@ -25,6 +25,20 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     super(daoFactory, defaultCurrency);
   }
 
+  async createOrder(
+      offerId: K,
+      userId: K,
+      quantity?: number, // Optional quantity parameter
+      currency: string = this.defaultCurrency,
+  ): Promise<IOrder<K>> {
+    const order = await super.createOrder(offerId, userId, quantity, currency);
+    const paymentIntent = await this.paymentClient.createPaymentIntent(order);
+    if(!paymentIntent)
+      throw new InvalidPaymentError("Failed to create payment intent", {orderId:order._id})
+
+    return paymentIntent
+  }
+
   async afterExecute(order: IOrder<K>): Promise<IUserCredits<K>> {
     if (order.status == "paid") {
       throw new InvalidPaymentError("order is already paid", {
