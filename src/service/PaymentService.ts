@@ -32,13 +32,14 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     currency: string = this.defaultCurrency,
   ): Promise<IOrder<K>> {
     const order = await super.createOrder(offerId, userId, quantity, currency);
-    const paymentIntent = await this.paymentClient.createPaymentIntent(order);
-    if (!paymentIntent)
+    const orderWithIntent = await this.paymentClient.createPaymentIntent(order);
+    if (!orderWithIntent)
       throw new InvalidPaymentError("Failed to create payment intent", {
         orderId: order._id,
       });
 
-    return paymentIntent;
+    // FIXME save the paymentIntentId to the original order
+    return orderWithIntent;
   }
 
   async afterExecute(order: IOrder<K>): Promise<IUserCredits<K>> {
