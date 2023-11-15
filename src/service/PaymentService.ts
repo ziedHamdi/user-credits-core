@@ -38,7 +38,7 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
         orderId: order._id,
       });
 
-    // FIXME save the paymentIntentId to the original order
+    // FIXME save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
     return orderWithIntent;
   }
 
