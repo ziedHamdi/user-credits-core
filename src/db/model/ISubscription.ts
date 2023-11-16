@@ -8,6 +8,10 @@ import { IOfferCycle } from "./IOffer";
  */
 export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
   /**
+   * The used currency for the order
+   */
+  currency: string;
+  /**
    * The custom cycle duration in seconds, only applicable when cycle is 'custom'.
    */
   customCycle: number | null;
@@ -34,6 +38,10 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
   orderId: K;
 
   /**
+   * The ordered quantity
+   */
+  quantity: number;
+  /**
    * The start date of the subscription.
    */
   starts: Date;
@@ -47,4 +55,9 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
    * The number of tokens associated with the subscription.
    */
   tokens: number;
+
+  /**
+   * The total price billed
+   */
+  total: number;
 }

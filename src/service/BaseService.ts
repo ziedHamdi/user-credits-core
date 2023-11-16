@@ -173,15 +173,18 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
   protected buildSubscription(offer: IOffer<K>, order: IOrder<K>) {
     return {
+      currency: order.currency,
       customCycle: offer.customCycle,
       cycle: offer.cycle,
       name: offer.name,
       offerGroup: offer.offerGroup,
       offerId: order.offerId,
       orderId: order._id,
+      quantity: order.quantity,
       starts: order.createdAt,
       status: "pending",
       tokens: offer.tokenCount,
+      total: order.total,
     } as unknown as ISubscription<K>;
   }
 

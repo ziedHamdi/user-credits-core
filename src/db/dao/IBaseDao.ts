@@ -26,6 +26,8 @@ export interface IBaseDao<K extends IMinimalId, D> {
 
   findById(id: K): Promise<D | null>;
 
+  findByIdStr(id: string): Promise<D | null>;
+
   findOne(query: object): Promise<D | null>;
 
   // findOne(query: object): Promise<D>;
