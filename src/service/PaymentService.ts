@@ -38,8 +38,14 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
         orderId: order._id,
       });
 
-    // FIXME save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
-    return orderWithIntent;
+    // save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
+    const updatedOrder = await this.getDaoFactory().getOrderDao().findById(order._id) as IOrder<K>;
+    updatedOrder.paymentIntentId = orderWithIntent.paymentIntentId;
+    await updatedOrder.save();
+
+    //this value should not be saved to db, it is temporary for the transaction only
+    updatedOrder.paymentIntentSecret = orderWithIntent.paymentIntentSecret;
+    return updatedOrder;
   }
 
   async afterExecute(order: IOrder<K>): Promise<IUserCredits<K>> {
@@ -57,6 +63,9 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     // Execute the payment and get the updated order
     const updatedOrder: IOrder<K> =
       await this.paymentClient.afterPaymentExecuted(order);
+
+    // save the order with its new state and history (taken from the payment platform)
+    await updatedOrder.save();
 
     // Update the subscription
     this.updateCredits(userCredits, updatedOrder);
@@ -118,7 +127,7 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
         order.cycle,
         order.quantity,
       );
-      existingOffer.tokens += (order.tokenCount || 0) * order.quantity;
+      existingOffer.tokens += (order.tokenCount || 0) * (order.quantity || 1);
       return existingOffer;
     }
 
