@@ -12,6 +12,7 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
   currency: string;
   customCycle: number | null;
   cycle: IOfferCycle;
+  expires: Date;
   history: [IOrderStatus] | null;
   /** Check documentation in @IOffer */
   offerGroup: string;
@@ -25,6 +26,7 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
    */
   paymentIntentSecret: string | null;
   quantity: number;
+  starts: Date;
   status: "pending" | "paid" | "refused" | "error";
   taxRate: number | null;
   tokenCount: number | null;

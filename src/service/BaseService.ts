@@ -133,7 +133,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     await userCredits.save();
   }
 
-  private async updateSubscriptionsOnOrderChange(
+  protected async updateSubscriptionsOnOrderChange(
     userCredits: IUserCredits<K> | null,
     offer: IOffer<K>,
     order: IOrder<K>,
@@ -176,6 +176,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       currency: order.currency,
       customCycle: offer.customCycle,
       cycle: offer.cycle,
+      expired: order.expires,
       name: offer.name,
       offerGroup: offer.offerGroup,
       offerId: order.offerId,

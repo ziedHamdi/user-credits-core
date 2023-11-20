@@ -39,7 +39,9 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
       });
 
     // save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
-    const updatedOrder = await this.getDaoFactory().getOrderDao().findById(order._id) as IOrder<K>;
+    const updatedOrder = (await this.getDaoFactory()
+      .getOrderDao()
+      .findById(order._id)) as IOrder<K>;
     updatedOrder.paymentIntentId = orderWithIntent.paymentIntentId;
     await updatedOrder.save();
 
@@ -64,11 +66,10 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     const updatedOrder: IOrder<K> =
       await this.paymentClient.afterPaymentExecuted(order);
 
-    // save the order with its new state and history (taken from the payment platform)
-    await updatedOrder.save();
-
     // Update the subscription
     this.updateCredits(userCredits, updatedOrder);
+    // save the order with its new state and history (taken from the payment platform) and its start and expiry dates computed
+    await updatedOrder.save();
 
     // Save the changes to user credits
     userCredits.markModified("offers");
@@ -77,6 +78,7 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     return userCredits;
   }
 
+  // Might want to return the order too to indicate it was changed
   protected updateCredits(
     userCredits: IUserCredits<K>,
     updatedOrder: IOrder<K>,
@@ -103,7 +105,7 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
       // existingSubscription.tokens += updatedOrder.tokenCount || 0;
       // Modify the offer object as needed
       // offerGroup
-      return this.updateOfferGroup(
+      return this.updateAsPaid(
         userCredits,
         updatedOrder,
       ) as IActivatedOffer;
@@ -111,40 +113,32 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     return null;
   }
 
-  protected updateOfferGroup(
+  // Might want to return the order too to indicate it was changed
+  protected updateAsPaid(
     userCredits: IUserCredits<K>,
     order: IOrder<K>,
   ): IActivatedOffer {
-    const existingOfferIndex = userCredits.offers.findIndex(
-      (offer: IActivatedOffer) => offer.offerGroup === order.offerGroup,
-    );
-
+    const existingOfferIndex = userCredits.offers.findIndex((offer) => offer.offerGroup === order.offerGroup);
     if (existingOfferIndex !== -1) {
       // Update the existing offer with the new information
       const existingOffer = userCredits.offers[existingOfferIndex];
-      existingOffer.expires = this.calculateExpiryDate(
-        existingOffer.expires,
-        order.cycle,
-        order.quantity,
-      );
+      existingOffer.expires = this.calculateExpiryDate(existingOffer.expires, order.cycle, order.quantity);
       existingOffer.tokens += (order.tokenCount || 0) * (order.quantity || 1);
       return existingOffer;
     }
-
-    const currentDate = order.updatedAt || order.createdAt || new Date();
+    if( !order.starts ) {
+      order.starts = new Date();
+    }
     // Create a new offer if not found
-    const newOffer: IActivatedOffer = {
-      expires: this.calculateExpiryDate(
-        currentDate,
-        order.cycle,
-        order.quantity,
-      ),
+    order.expires = this.calculateExpiryDate(order.starts, order.cycle, order.quantity);
+
+    const newOffer = {
+      expires: order.expires,
       offerGroup: order.offerGroup,
-      starts: currentDate,
+      starts: order.starts,
       tokens: (order.tokenCount || 0) * (order.quantity || 1),
     };
     userCredits.offers.push(newOffer);
-
     return newOffer;
   }
 
