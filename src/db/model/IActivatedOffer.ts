@@ -20,5 +20,5 @@ export interface IActivatedOffer {
   /**
    * The number of tokens associated with the activated offer.
    */
-  tokens: number;
+  tokens: number | null;
 }
