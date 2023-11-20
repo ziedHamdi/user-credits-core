@@ -35,7 +35,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   >;
   protected readonly userCreditsDao: IUserCreditsDao<K, IUserCredits<K>>;
 
-  constructor(
+  protected constructor(
     daoFactory: IDaoFactory<K>,
     protected defaultCurrency: string = "usd",
   ) {
@@ -329,7 +329,23 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return this.daoFactory.getUserCreditsDao().findByUserId(userId);
   }
 
+  protected async computeStartDate(order: IOrder<K>): Promise<void> {
+    if( order.starts )
+      return;
+
+    const orderList: IOrder<K>[] = await this.orderDao.find({offerGroup: order.offerGroup, status: "paid", expires: {$exists:true}});
+    if( !orderList || orderList.length == 0) {
+      order.starts = new Date();
+      return;
+    }
+
+    const lastToFirstExpiryDate = orderList.sort( (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0) );
+    order.starts = lastToFirstExpiryDate[0].expires;
+  }
+
   equals(a: K, b: K): boolean {
     return defaultCustomEquals(a, b);
   }
+
+  abstract payOrder(orderId: K): Promise<IOrder<K>>;
 }

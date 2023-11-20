@@ -20,6 +20,7 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
    * The cycle of the subscription (e.g., 'once', 'weekly', 'monthly', etc.).
    */
   cycle: IOfferCycle;
+  expires: Date;
   name: string;
   /**
    * The grouping of offers belonging to the same service.

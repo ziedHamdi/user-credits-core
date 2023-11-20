@@ -32,6 +32,17 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
         currency: string = this.defaultCurrency,
     ): Promise<IOrder<K>> {
         const order = await super.createOrder(offerId, userId, quantity, currency);
+        return await this.payLoadedOrder(order);
+    }
+
+    async payOrder(
+        orderId: K
+    ): Promise<IOrder<K>> {
+        const order = await super.getDaoFactory().getOrderDao().findById(orderId) as IOrder<K>;
+        return await this.payLoadedOrder(order);
+    }    
+
+    protected async payLoadedOrder(order: IOrder<K>) {
         const orderWithIntent = await this.paymentClient.createPaymentIntent(order);
         if (!orderWithIntent)
             throw new InvalidPaymentError("Failed to create payment intent", {
@@ -67,7 +78,7 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
             await this.paymentClient.afterPaymentExecuted(order);
 
         // Update the subscription
-        this.updateCredits(userCredits, updatedOrder);
+        await this.updateCredits(userCredits, updatedOrder);
         // save the order with its new state and history (taken from the payment platform) and its start and expiry dates computed
         await updatedOrder.save();
 
@@ -79,10 +90,10 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     }
 
     // Might want to return the order too to indicate it was changed
-    protected updateCredits(
+    protected async updateCredits(
         userCredits: IUserCredits<K>,
         updatedOrder: IOrder<K>,
-    ): IActivatedOffer | null {
+    ): Promise<IActivatedOffer | null> {
         const existingSubscription: ISubscription<K> =
             userCredits.subscriptions.find((subscription) =>
                 this.equals(subscription.orderId, updatedOrder._id),
@@ -105,21 +116,29 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
             // existingSubscription.tokens += updatedOrder.tokenCount || 0;
             // Modify the offer object as needed
             // offerGroup
-            return this.updateAsPaid(
-                userCredits,
-                updatedOrder,
+            const iActivatedOffer = await this.updateAsPaid(
+              userCredits,
+              updatedOrder,
             ) as IActivatedOffer;
+
+            // these will be saved by the caller
+            existingSubscription.starts = updatedOrder.starts;
+            existingSubscription.expires = updatedOrder.expires;
+
+            return iActivatedOffer;
         }
+
+
         return null;
     }
 
     // Might want to return the order too to indicate it was changed
-    protected updateAsPaid(
+    protected async updateAsPaid(
         userCredits: IUserCredits<K>,
         order: IOrder<K>,
-    ): IActivatedOffer {
+    ): Promise<IActivatedOffer> {
         if (!order.starts) {
-            order.starts = new Date();
+            await this.computeStartDate(order);
         }
         // Create a new offer if not found
         order.expires = this.calculateExpiryDate(order.starts, order.cycle, order.quantity);
