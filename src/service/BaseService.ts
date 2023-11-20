@@ -336,6 +336,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       expires: { $exists: true },
       offerGroup: order.offerGroup,
       status: "paid",
+      userId: order.userId,
     });
     if (!orderList || orderList.length == 0) {
       order.starts = new Date();
