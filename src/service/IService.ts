@@ -36,19 +36,11 @@ export interface IService<K extends IMinimalId> {
   createOrder(offerId: unknown, userId: unknown): Promise<IOrder<K>>;
 
   /**
-   * Creates a payment intent for a user from a selected offer, saving the user's intention to purchase the offer.
-   *
-   * @param orderId The unique identifier of the selected order.
-   * @returns IOrder promise that resolves to the updated order.
-   */
-  payOrder(orderId: K): Promise<IOrder<K>>
-  /**
    * You can define your own logic for key equality
    * @param a a key
    * @param b the other key
    */
   equals(a: K, b: K): boolean;
-
   /**
    * Provides access to the data access objects (DAOs) used to store data locally within the application.
    * This includes DAOs for offers, orders, token timetables, and user credits.
@@ -77,4 +69,12 @@ export interface IService<K extends IMinimalId> {
    * return a {@link IUserCredits} instance if found or null
    */
   loadUserCredits(userId: K): Promise<IUserCredits<K>>;
+
+  /**
+   * Creates a payment intent for a user from a selected offer, saving the user's intention to purchase the offer.
+   *
+   * @param orderId The unique identifier of the selected order.
+   * @returns IOrder promise that resolves to the updated order.
+   */
+  payOrder(orderId: K): Promise<IOrder<K>>;
 }

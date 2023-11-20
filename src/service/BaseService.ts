@@ -330,16 +330,21 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   }
 
   protected async computeStartDate(order: IOrder<K>): Promise<void> {
-    if( order.starts )
-      return;
+    if (order.starts) return;
 
-    const orderList: IOrder<K>[] = await this.orderDao.find({offerGroup: order.offerGroup, status: "paid", expires: {$exists:true}});
-    if( !orderList || orderList.length == 0) {
+    const orderList: IOrder<K>[] = await this.orderDao.find({
+      expires: { $exists: true },
+      offerGroup: order.offerGroup,
+      status: "paid",
+    });
+    if (!orderList || orderList.length == 0) {
       order.starts = new Date();
       return;
     }
 
-    const lastToFirstExpiryDate = orderList.sort( (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0) );
+    const lastToFirstExpiryDate = orderList.sort(
+      (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0),
+    );
     order.starts = lastToFirstExpiryDate[0].expires;
   }
 
