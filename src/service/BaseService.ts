@@ -7,6 +7,7 @@ import type {
 } from "../db/dao/types";
 import { IOfferCycle } from "../db/model/IOffer";
 import type {
+  IActivatedOffer,
   IMinimalId,
   IOffer,
   IOrder,
@@ -95,12 +96,6 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       throw new InvalidOrderError("Requested quantity exceeds the limit");
     }
 
-    let tokenCount = null;
-    if (offer.kind === "tokens") {
-      // Set the tokenCount based on the offer kind
-      tokenCount = offer.tokenCount;
-    }
-
     const total = quantity !== undefined ? offer.price * quantity : offer.price;
 
     const order: IOrder<K> = (await this.orderDao.create({
@@ -111,82 +106,13 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       offerId,
       quantity,
       status: "pending",
-      tokenCount,
+      tokenCount: offer.tokenCount, //copy unconditionally
       total,
       userId,
     } as IOrder<K>)) as IOrder<K>;
     await this.onOrderChange(userId, order, offer);
 
     return order;
-  }
-
-  protected async onOrderChange(userId: K, order: IOrder<K>, offer: IOffer<K>) {
-    let userCredits: IUserCredits<K> | null =
-      await this.userCreditsDao.findByUserId(userId);
-    userCredits = await this.updateSubscriptionsOnOrderChange(
-      userCredits,
-      offer,
-      order,
-      userId,
-    );
-
-    await userCredits.save();
-  }
-
-  protected async updateSubscriptionsOnOrderChange(
-    userCredits: IUserCredits<K> | null,
-    offer: IOffer<K>,
-    order: IOrder<K>,
-    userId: K,
-  ) {
-    if (!userCredits) {
-      const subscription: Partial<ISubscription<K>> = this.buildSubscription(
-        offer,
-        order,
-      );
-      userCredits = await this.userCreditsDao.build({
-        subscriptions: [subscription],
-        userId,
-      });
-    } else {
-      // Check if a subscription with the same orderId exists
-      const existingSubscription = userCredits.subscriptions.find(
-        (subscription) => subscription.orderId === order._id,
-      );
-
-      if (existingSubscription) {
-        // Update the existing subscription
-        existingSubscription.status = order.status;
-        existingSubscription.starts = order.updatedAt;
-      } else {
-        // Create a new subscription and add it to the array
-        const newSubscription: Partial<ISubscription<K>> =
-          this.buildSubscription(offer, order);
-
-        userCredits.subscriptions.push(
-          newSubscription as unknown as ISubscription<K>,
-        );
-      }
-    }
-    return userCredits;
-  }
-
-  protected buildSubscription(offer: IOffer<K>, order: IOrder<K>) {
-    return {
-      currency: order.currency,
-      customCycle: offer.customCycle,
-      cycle: offer.cycle,
-      expired: order.expires,
-      name: offer.name,
-      offerGroup: offer.offerGroup,
-      offerId: order.offerId,
-      orderId: order._id,
-      quantity: order.quantity,
-      starts: order.createdAt,
-      status: "pending",
-      tokens: offer.tokenCount,
-      total: order.total,
-    } as unknown as ISubscription<K>;
   }
 
   /**
@@ -273,6 +199,121 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     });
   }
 
+  abstract afterExecute(order: IOrder<K>): Promise<IUserCredits<K>>;
+
+  loadUserCredits(userId: K): Promise<IUserCredits<K>> {
+    return this.daoFactory.getUserCreditsDao().findByUserId(userId);
+  }
+
+  equals(a: K, b: K): boolean {
+    return defaultCustomEquals(a, b);
+  }
+
+  async tokensConsumed(
+    userId: K,
+    offerGroup: string,
+    count: number,
+  ): Promise<ITokenTimetable<K>> {
+    const tokenTimetableDao = this.getDaoFactory().getTokenTimetableDao();
+    const tokenTimetable = await tokenTimetableDao.create({
+      offerGroup,
+      tokens: -count,
+      userId,
+    } as Partial<ITokenTimetable<K>>);
+    const userCredits = await this.getUserCredits(userId);
+    const offer = userCredits.offers.find((activeOfferGroup) => {
+      if (activeOfferGroup.offerGroup === offerGroup) {
+        activeOfferGroup.tokens = (activeOfferGroup.tokens ?? 0) - count;
+        return true;
+      }
+      return false;
+    });
+    if (!offer) {
+      if (!userCredits.offers) userCredits.offers = [];
+
+      userCredits.offers.push({
+        offerGroup,
+        starts: new Date(),
+        tokens: -count,
+      } as IActivatedOffer);
+    }
+
+    userCredits.markModified("offers");
+    await userCredits.save();
+    return tokenTimetable;
+  }
+
+  abstract payOrder(orderId: K): Promise<IOrder<K>>;
+
+  protected async onOrderChange(userId: K, order: IOrder<K>, offer: IOffer<K>) {
+    let userCredits: IUserCredits<K> | null =
+      await this.userCreditsDao.findByUserId(userId);
+    userCredits = await this.updateSubscriptionsOnOrderChange(
+      userCredits,
+      offer,
+      order,
+      userId,
+    );
+
+    await userCredits.save();
+  }
+
+  protected async updateSubscriptionsOnOrderChange(
+    userCredits: IUserCredits<K> | null,
+    offer: IOffer<K>,
+    order: IOrder<K>,
+    userId: K,
+  ) {
+    if (!userCredits) {
+      const subscription: Partial<ISubscription<K>> = this.buildSubscription(
+        offer,
+        order,
+      );
+      userCredits = await this.userCreditsDao.build({
+        subscriptions: [subscription],
+        userId,
+      });
+    } else {
+      // Check if a subscription with the same orderId exists
+      const existingSubscription = userCredits.subscriptions.find(
+        (subscription) => subscription.orderId === order._id,
+      );
+
+      if (existingSubscription) {
+        // Update the existing subscription
+        existingSubscription.status = order.status;
+        existingSubscription.starts = order.updatedAt;
+      } else {
+        // Create a new subscription and add it to the array
+        const newSubscription: Partial<ISubscription<K>> =
+          this.buildSubscription(offer, order);
+
+        userCredits.subscriptions.push(
+          newSubscription as unknown as ISubscription<K>,
+        );
+      }
+    }
+    return userCredits;
+  }
+
+  protected buildSubscription(offer: IOffer<K>, order: IOrder<K>) {
+    return {
+      currency: order.currency,
+      customCycle: offer.customCycle,
+      cycle: offer.cycle,
+      expired: order.expires,
+      name: offer.name,
+      offerGroup: offer.offerGroup,
+      offerId: order.offerId,
+      orderId: order._id,
+      quantity: order.quantity,
+      starts: order.createdAt,
+      status: "pending",
+      tokens: offer.tokenCount,
+      total: order.total,
+    } as unknown as ISubscription<K>;
+  }
+
   protected async getUserCredits(userId: K): Promise<IUserCredits<K>> {
     const userCredits: IUserCredits<K> = await this.daoFactory
       .getUserCreditsDao()
@@ -323,12 +364,6 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     throw new Error("Invalid or missing cycle value");
   }
 
-  abstract afterExecute(order: IOrder<K>): Promise<IUserCredits<K>>;
-
-  loadUserCredits(userId: K): Promise<IUserCredits<K>> {
-    return this.daoFactory.getUserCreditsDao().findByUserId(userId);
-  }
-
   protected async computeStartDate(order: IOrder<K>): Promise<void> {
     if (order.starts) return;
 
@@ -348,10 +383,4 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     );
     order.starts = lastToFirstExpiryDate[0].expires;
   }
-
-  equals(a: K, b: K): boolean {
-    return defaultCustomEquals(a, b);
-  }
-
-  abstract payOrder(orderId: K): Promise<IOrder<K>>;
 }

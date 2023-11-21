@@ -6,6 +6,7 @@ import { IMinimalId } from "./IMinimalId";
  */
 export interface ITokenTimetable<K extends IMinimalId> extends IBaseEntity<K> {
   createdAt: Date;
+  offerGroup: string;
   tokens: number;
   userId: K;
 }

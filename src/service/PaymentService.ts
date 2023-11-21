@@ -4,6 +4,7 @@ import type {
   IMinimalId,
   IOrder,
   ISubscription,
+  ITokenTimetable,
   IUserCredits,
 } from "../db/model/types";
 import {
@@ -43,25 +44,6 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     return await this.payLoadedOrder(order);
   }
 
-  protected async payLoadedOrder(order: IOrder<K>) {
-    const orderWithIntent = await this.paymentClient.createPaymentIntent(order);
-    if (!orderWithIntent)
-      throw new InvalidPaymentError("Failed to create payment intent", {
-        orderId: order._id,
-      });
-
-    // save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
-    const updatedOrder = (await this.getDaoFactory()
-      .getOrderDao()
-      .findById(order._id)) as IOrder<K>;
-    updatedOrder.paymentIntentId = orderWithIntent.paymentIntentId;
-    await updatedOrder.save();
-
-    //this value should not be saved to db, it is temporary for the transaction only
-    updatedOrder.paymentIntentSecret = orderWithIntent.paymentIntentSecret;
-    return updatedOrder;
-  }
-
   async afterExecute(order: IOrder<K>): Promise<IUserCredits<K>> {
     if (order.status == "paid") {
       throw new InvalidPaymentError("order is already paid", {
@@ -88,6 +70,43 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     await userCredits.save();
 
     return userCredits;
+  }
+
+  async orderStatusChanged(
+    orderId: K,
+    status: "pending" | "paid" | "refused",
+  ): Promise<IOrder<K>> {
+    const order: null | IOrder<K> = await this.orderDao.findById(orderId);
+    if (!order) throw new EntityNotFoundError("IOrder", orderId);
+    order.status = status;
+    await order.save();
+    return order as IOrder<K>;
+  }
+
+  async remainingTokens(userId: K): Promise<IUserCredits<K>> {
+    const userCredits: null | IUserCredits<K> =
+      await this.userCreditsDao.findOne({ userId });
+    if (!userCredits) throw new EntityNotFoundError("IUserCredits", userId);
+    return userCredits;
+  }
+
+  protected async payLoadedOrder(order: IOrder<K>) {
+    const orderWithIntent = await this.paymentClient.createPaymentIntent(order);
+    if (!orderWithIntent)
+      throw new InvalidPaymentError("Failed to create payment intent", {
+        orderId: order._id,
+      });
+
+    // save the paymentIntentId to the original order: https://github.com/ziedHamdi/user-credits-core/issues/1
+    const updatedOrder = (await this.getDaoFactory()
+      .getOrderDao()
+      .findById(order._id)) as IOrder<K>;
+    updatedOrder.paymentIntentId = orderWithIntent.paymentIntentId;
+    await updatedOrder.save();
+
+    //this value should not be saved to db, it is temporary for the transaction only
+    updatedOrder.paymentIntentSecret = orderWithIntent.paymentIntentSecret;
+    return updatedOrder;
   }
 
   // Might want to return the order too to indicate it was changed
@@ -125,6 +144,15 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
       // these will be saved by the caller
       existingSubscription.starts = updatedOrder.starts;
       existingSubscription.expires = updatedOrder.expires;
+
+      if (updatedOrder.tokenCount) {
+        const tokenTimetableDao = this.getDaoFactory().getTokenTimetableDao();
+        await tokenTimetableDao.create({
+          offerGroup: updatedOrder.offerGroup,
+          tokens: updatedOrder.tokenCount,
+          userId: userCredits.userId,
+        } as Partial<ITokenTimetable<K>>);
+      }
 
       return iActivatedOffer;
     }
@@ -178,23 +206,5 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     };
     userCredits.offers.push(newOffer);
     return newOffer;
-  }
-
-  async orderStatusChanged(
-    orderId: K,
-    status: "pending" | "paid" | "refused",
-  ): Promise<IOrder<K>> {
-    const order: null | IOrder<K> = await this.orderDao.findById(orderId);
-    if (!order) throw new EntityNotFoundError("IOrder", orderId);
-    order.status = status;
-    await order.save();
-    return order as IOrder<K>;
-  }
-
-  async remainingTokens(userId: K): Promise<IUserCredits<K>> {
-    const userCredits: null | IUserCredits<K> =
-      await this.userCreditsDao.findOne({ userId });
-    if (!userCredits) throw new EntityNotFoundError("IUserCredits", userId);
-    return userCredits;
   }
 }
