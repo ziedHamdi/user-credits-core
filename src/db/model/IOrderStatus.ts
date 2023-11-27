@@ -1,5 +1,6 @@
 export interface IOrderStatus {
   date: Date;
   message: string;
-  status: "pending" | "paid" | "refused" | "error";
+  payload: string;
+  status: "pending" | "paid" | "refused" | "error" | "inconsistent" | "partial";
 }

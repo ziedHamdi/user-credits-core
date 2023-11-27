@@ -27,7 +27,7 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
   paymentIntentSecret: string | null;
   quantity: number;
   starts: Date;
-  status: "pending" | "paid" | "refused" | "error";
+  status: "pending" | "paid" | "refused" | "error" | "inconsistent" | "partial";
   taxRate: number | null;
   tokenCount: number | null;
   total: number;
