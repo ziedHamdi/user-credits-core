@@ -3,6 +3,7 @@ import type {
   IActivatedOffer,
   IMinimalId,
   IOrder,
+  IOrderStatus,
   ISubscription,
   ITokenTimetable,
   IUserCredits,
@@ -33,7 +34,19 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     currency: string = this.defaultCurrency,
   ): Promise<IOrder<K>> {
     const order = await super.createOrder(offerId, userId, quantity, currency);
-    return await this.payLoadedOrder(order);
+    if (order.total > 0) {
+      // prepare intent of payment in gateway
+      return await this.payLoadedOrder(order);
+    } else {
+      // execute immediately if there's nothing to pay. If you decide to condition the acceptance of free offers,
+      // handle it accordingly in afterExecute() or afterFreeOrderExecuted()
+      await this.afterExecute(order);
+      // return the order saved in db
+      return (await super
+        .getDaoFactory()
+        .getOrderDao()
+        .findById(order._id)) as IOrder<K>;
+    }
   }
 
   async payOrder(orderId: K): Promise<IOrder<K>> {
@@ -56,10 +69,14 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
       order.userId,
     );
 
-    // Execute the payment and get the updated order
-    const updatedOrder: IOrder<K> =
-      await this.paymentClient.afterPaymentExecuted(order);
-
+    let updatedOrder: IOrder<K>;
+    if (order.total > 0) {
+      // Check the payment status in the payment gateway and construct an updated order
+      updatedOrder = await this.paymentClient.afterPaymentExecuted(order);
+    } else {
+      // skipping payment status check afterPaymentExecuted() if there's nothing that can be paid
+      updatedOrder = this.afterFreeOrderExecuted(order);
+    }
     // Update the subscription
     await this.updateCredits(userCredits, updatedOrder);
     // save the order with its new state and history (taken from the payment platform) and its start and expiry dates computed
@@ -70,6 +87,22 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     await userCredits.save();
 
     return userCredits;
+  }
+
+  protected afterFreeOrderExecuted(order: IOrder<K>) {
+    order.status = "paid";
+    const historyItem = {
+      message: "Free subscription succeeded",
+      status: "paid",
+    } as IOrderStatus;
+    if (!order.history) {
+      order.history = [] as unknown as [IOrderStatus];
+    }
+    historyItem.date = historyItem.date ?? new Date();
+    order.history.push(historyItem);
+    order.markModified("history");
+
+    return order;
   }
 
   async orderStatusChanged(
