@@ -253,11 +253,6 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   ) {
     if (offer.combinedItems && offer.combinedItems.length > 0) {
       for (const item of offer.combinedItems) {
-        // IMPROVEMENT add item.applyOverride support
-        if (item.applyOverride) {
-          console.log("Combined offer overriding not yet implemented");
-        }
-
         const combinedOffer = await this.offerDao.findById(item.offerId);
         if (!combinedOffer) {
           console.error(
