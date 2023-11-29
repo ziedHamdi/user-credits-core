@@ -14,5 +14,8 @@
   "baseUrl": ".",
   "exclude": ["coverage", "dist", "node_modules", "test"],
   "extends": "@tsconfig/recommended/tsconfig.json",
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*",
+    "node_modules/@types/jest/index.d.ts"
+  ]
 }
