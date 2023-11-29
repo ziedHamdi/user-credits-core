@@ -8,12 +8,6 @@ import {
 import { BaseService } from "./BaseService";
 import type { IPaymentClient } from "./IPaymentClient";
 
-export type ITokenHolder = {
-  offerGroup: string;
-  quantity: number;
-  tokenCount: number;
-};
-
 export class PaymentService<K extends IMinimalId> extends BaseService<K> {
   constructor(
     daoFactory: IDaoFactory<K>,

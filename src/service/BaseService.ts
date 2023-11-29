@@ -30,7 +30,6 @@ import {
   defaultCustomEquals,
 } from "../util";
 import type { IService } from "./IService";
-import type { ITokenHolder } from "./PaymentService";
 
 export interface IExpiryDateComputeInput<K extends IMinimalId> {
   appendDate: boolean;
@@ -41,6 +40,12 @@ export interface IExpiryDateComputeInput<K extends IMinimalId> {
   quantity: number;
   starts: Date;
 }
+
+export type ITokenHolder = {
+  offerGroup: string;
+  quantity: number;
+  tokenCount: number;
+};
 
 export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   protected daoFactory: IDaoFactory<K>;
@@ -564,35 +569,38 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     userCredits: IUserCredits<K>,
     order: IOrder<K>,
   ): Promise<IActivatedOffer> {
-    if (!order.starts) {
-      await this.computeStartDate(
-        order.userId,
-        order as unknown as IExpiryDateComputeInput<K>,
-      );
-    }
-    // Create a new offer if not found
-    const mainOfferGroupInUserCredits = this.updateOfferGroupTokens(
-      order as ITokenHolder,
+    const userId = order.userId;
+    const mainOfferGroupInUserCredits = await this.handleOrderDateAndTokens(
+      userId,
+      order as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
       userCredits,
-      order as unknown as IExpiryDateComputeInput<K>,
     );
 
     if (order.combinedItems && order.combinedItems.length > 0) {
       for (const orderItemSpec of order.combinedItems) {
-        await this.computeStartDate(
-          order.userId,
-          orderItemSpec as unknown as IExpiryDateComputeInput<K>,
-        );
-
-        this.updateOfferGroupTokens(
-          orderItemSpec as ITokenHolder,
+        await this.handleOrderDateAndTokens(
+          userId,
+          orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
           userCredits,
-          orderItemSpec as unknown as IExpiryDateComputeInput<K>,
         );
       }
     }
 
     return mainOfferGroupInUserCredits;
+  }
+
+  protected async handleOrderDateAndTokens(
+    userId: K,
+    orderItemSpec: IExpiryDateComputeInput<K> & ITokenHolder,
+    userCredits: IUserCredits<K>,
+  ) {
+    await this.computeStartDate(userId, orderItemSpec);
+
+    return this.updateOfferGroupTokens(
+      orderItemSpec,
+      userCredits,
+      orderItemSpec,
+    );
   }
 
   protected updateOfferGroupTokens(

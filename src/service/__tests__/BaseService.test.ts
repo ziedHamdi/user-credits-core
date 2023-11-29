@@ -3,7 +3,8 @@ import { IDaoFactory } from "../../db/dao/IDaoFactory";
 import { IOffer, IOrder, IUserCredits } from "../../db/model/types";
 import { InvalidOrderError } from "../../errors";
 import { addDays } from "../../util";
-import { BaseService, IExpiryDateComputeInput } from "../BaseService";
+import type { IExpiryDateComputeInput, ITokenHolder } from "../BaseService";
+import { BaseService } from "../BaseService";
 import { MockDaoFactory } from "./MockDaoFactory";
 
 class BaseServiceTest extends BaseService<string> {
@@ -55,6 +56,14 @@ class BaseServiceTest extends BaseService<string> {
 
   calculateExpiryDate(order: IExpiryDateComputeInput<string>): Date {
     return super.calculateExpiryDate(order);
+  }
+
+  updateOfferGroupTokens(
+    order: ITokenHolder,
+    userCredits: IUserCredits<string>,
+    expirySpecs: IExpiryDateComputeInput<string>,
+  ) {
+    return super.updateOfferGroupTokens(order, userCredits, expirySpecs);
   }
 }
 
@@ -411,5 +420,76 @@ describe("BaseService", () => {
         "Invalid or missing cycle value",
       );
     });
+  });
+  describe("updateOfferGroupTokens", () => {
+    let service: BaseServiceTest;
+    let mockUserCredits: { offers: any[]; userId: string };
+    let mockOrder: ITokenHolder;
+    let mockExpirySpecs: IExpiryDateComputeInput<string>;
+
+    beforeEach(() => {
+      service = new BaseServiceTest(new MockDaoFactory());
+      mockUserCredits = {
+        offers: [],
+        userId: "mockUserId",
+      };
+
+      mockOrder = {
+        offerGroup: "testOfferGroup",
+        quantity: 2,
+        tokenCount: 10,
+      };
+
+      mockExpirySpecs = {
+        cycle: "daily",
+        quantity: 2,
+        starts: new Date(),
+      } as unknown as IExpiryDateComputeInput<string>;
+    });
+
+    test("updates existing offer group", () => {
+      // Add an existing offer to user credits
+      const existingOffer = {
+        expires: new Date(),
+        offerGroup: mockOrder.offerGroup,
+        tokens: 5,
+      };
+      mockUserCredits.offers.push(existingOffer);
+
+      const updatedOffer = service.updateOfferGroupTokens(
+        mockOrder,
+        mockUserCredits as unknown as IUserCredits<string>,
+        mockExpirySpecs,
+      );
+
+      // Assertions
+      expect(updatedOffer).toBeDefined();
+      expect(updatedOffer).toBe(existingOffer);
+      expect(updatedOffer.expires).toEqual(
+        service.calculateExpiryDate(mockExpirySpecs),
+      );
+      expect(updatedOffer.tokens).toEqual(5 + 2 * 10);
+    });
+
+    test("adds new offer group", () => {
+      const updatedOffer = service.updateOfferGroupTokens(
+        mockOrder,
+        mockUserCredits as unknown as IUserCredits<string>,
+        mockExpirySpecs,
+      );
+
+      // Assertions
+      expect(updatedOffer).toBeDefined();
+      expect(updatedOffer.expires).toEqual(
+        service.calculateExpiryDate(mockExpirySpecs),
+      );
+      expect(updatedOffer.tokens).toEqual(mockOrder.tokenCount);
+
+      // Check if the new offer is added to user credits
+      expect(mockUserCredits.offers).toHaveLength(1);
+      expect(mockUserCredits.offers[0]).toBe(updatedOffer);
+    });
+
+    // Add more test cases for different scenarios...
   });
 });
