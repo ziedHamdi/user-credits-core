@@ -1,3 +1,4 @@
+import { ICombinedOffer } from "./combine/ICombinedOffer";
 import { IBaseEntity } from "./IBaseEntity";
 import { IMinimalId } from "./IMinimalId";
 
@@ -27,13 +28,22 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    */
   asUnlockingOffers(dependsOnOffers: IOffer<K>[], reset?: boolean): string[];
   /**
+   * An offer can combine multiple offers in one payment. Each offer is encapsulated as an {@link ICombinedOffer} that
+   * specifies data on how that offer should behave in that context: eg. if it can be overridden by user's overriding offers.
+   *
+   * The prices of individual offers in this list will be ignored to the profit of the root offer.
+   */
+  combinedItems: ICombinedOffer<K>[];
+  /**
    * Only allowed to have a value when cycle=custom. Expresses the order duration before expiry in seconds.
    */
   customCycle: number | null;
+
   /**
    * Specifies how often the offer has to be renewed.
    */
   cycle: IOfferCycle;
+
   /**
    * If true, signals that it unlocks other offers when purchased: check the {@link unlockedBy} field.
    */

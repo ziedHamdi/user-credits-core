@@ -1,3 +1,4 @@
+import { ICombinedOrder } from "./combine/ICombinedOrder";
 import { IBaseEntity } from "./IBaseEntity";
 import { IMinimalId } from "./IMinimalId";
 import { IOfferCycle } from "./IOffer";
@@ -7,6 +8,7 @@ import { IOrderStatus } from "./IOrderStatus";
  * @param K the type of foreign keys (is used for all foreign keys type)
  */
 export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
+  combinedItems: ICombinedOrder<K>[];
   country: string | null;
   createdAt: Date;
   currency: string;

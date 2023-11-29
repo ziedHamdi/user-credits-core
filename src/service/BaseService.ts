@@ -5,6 +5,7 @@ import type {
   ITokenTimetableDao,
   IUserCreditsDao,
 } from "../db/dao/types";
+import { ICombinedOrder } from "../db/model/combine/ICombinedOrder";
 import { IOfferCycle } from "../db/model/IOffer";
 import type {
   IActivatedOffer,
@@ -87,16 +88,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       throw new Error("Offer not found"); // Handle this case based on your requirements
     }
 
-    // Check if the offer's maximum allowed quantity is defined and higher than the requested quantity
-    if (
-      offer.quantityLimit !== null &&
-      quantity !== undefined &&
-      quantity > offer.quantityLimit
-    ) {
-      throw new InvalidOrderError("Requested quantity exceeds the limit");
-    }
-
-    const total = quantity !== undefined ? offer.price * quantity : offer.price;
+    const total = this.computeTotal(quantity, offer);
 
     const order: IOrder<K> = (await this.orderDao.create({
       currency,
@@ -110,6 +102,8 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       total,
       userId,
     } as IOrder<K>)) as IOrder<K>;
+
+    await this.prefillCombinedOrders(offer, offerId, order);
     await this.onOrderChange(userId, order, offer);
 
     return order;
@@ -244,6 +238,64 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   }
 
   abstract payOrder(orderId: K): Promise<IOrder<K>>;
+
+  /**
+   * Each offer in {@link IOffer.combinedItems} will have a corresponding item in the order {@link IOrder.combinedItems}
+   * @param offer
+   * @param offerId
+   * @param order
+   * @protected
+   */
+  protected async prefillCombinedOrders(
+    offer: IOffer<K>,
+    offerId: K,
+    order: IOrder<K>,
+  ) {
+    if (offer.combinedItems && offer.combinedItems.length > 0) {
+      for (const item of offer.combinedItems) {
+        // IMPROVEMENT add item.applyOverride support
+        if (item.applyOverride) {
+          console.log("Combined offer overriding not yet implemented");
+        }
+
+        const combinedOffer = await this.offerDao.findById(item.offerId);
+        if (!combinedOffer) {
+          console.error(
+            "There's an error in the specification of offer: " +
+              offer._id +
+              " : the combinedItem with offerId: " +
+              offerId +
+              " can't be resolved.",
+          );
+          continue;
+        }
+        const tokenCount = item.quantity * (combinedOffer.tokenCount ?? 0);
+        if (!order.combinedItems) order.combinedItems = [];
+
+        const orderItem = {
+          offerGroup: item.offerGroup,
+          offerId: item.offerId,
+          quantity: item.quantity,
+          tokenCount,
+        } as ICombinedOrder<K>;
+
+        order.combinedItems.push(orderItem);
+      }
+    }
+    order.markModified("combinedItems");
+  }
+
+  protected computeTotal(quantity: number | undefined, offer: IOffer<K>) {
+    // Check if the offer's maximum allowed quantity is defined and higher than the requested quantity
+    if (
+      offer.quantityLimit !== null &&
+      quantity !== undefined &&
+      quantity > offer.quantityLimit
+    ) {
+      throw new InvalidOrderError("Requested quantity exceeds the limit");
+    }
+    return quantity !== undefined ? offer.price * quantity : offer.price;
+  }
 
   protected async onOrderChange(userId: K, order: IOrder<K>, offer: IOffer<K>) {
     let userCredits: IUserCredits<K> | null =
