@@ -12,11 +12,16 @@ import type {
   IMinimalId,
   IOffer,
   IOrder,
+  IOrderStatus,
   ISubscription,
   ITokenTimetable,
   IUserCredits,
 } from "../db/model/types";
-import { InvalidOrderError, PaymentError } from "../errors";
+import {
+  EntityNotFoundError,
+  InvalidOrderError,
+  PaymentError,
+} from "../errors";
 import {
   addDays,
   addMonths,
@@ -25,6 +30,17 @@ import {
   defaultCustomEquals,
 } from "../util";
 import type { IService } from "./IService";
+import type { ITokenHolder } from "./PaymentService";
+
+export interface IExpiryDateComputeInput<K extends IMinimalId> {
+  appendDate: boolean;
+  customCycle?: number;
+  cycle: IOfferCycle;
+  offerGroup: string;
+  offerId: K;
+  quantity: number;
+  starts: Date;
+}
 
 export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   protected daoFactory: IDaoFactory<K>;
@@ -239,6 +255,24 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
   abstract payOrder(orderId: K): Promise<IOrder<K>>;
 
+  async orderStatusChanged(
+    orderId: K,
+    status: "pending" | "paid" | "refused",
+  ): Promise<IOrder<K>> {
+    const order: null | IOrder<K> = await this.orderDao.findById(orderId);
+    if (!order) throw new EntityNotFoundError("IOrder", orderId);
+    order.status = status;
+    await order.save();
+    return order as IOrder<K>;
+  }
+
+  async remainingTokens(userId: K): Promise<IUserCredits<K>> {
+    const userCredits: null | IUserCredits<K> =
+      await this.userCreditsDao.findOne({ userId });
+    if (!userCredits) throw new EntityNotFoundError("IUserCredits", userId);
+    return userCredits;
+  }
+
   /**
    * Each offer in {@link IOffer.combinedItems} will have a corresponding item in the order {@link IOrder.combinedItems}
    * @param offer
@@ -264,7 +298,8 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           );
           continue;
         }
-        const tokenCount = item.quantity * (combinedOffer.tokenCount ?? 0);
+        const tokenCount =
+          (item.quantity || 1) * (combinedOffer.tokenCount ?? 0);
         if (!order.combinedItems) order.combinedItems = [];
 
         const orderItem = {
@@ -375,15 +410,11 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return userCredits;
   }
 
-  protected calculateExpiryDate(
-    startDate: Date,
-    cycle: IOfferCycle,
-    quantity: number = 1,
-    customCycle?: number,
-  ): Date {
-    const date = new Date(startDate);
+  protected calculateExpiryDate(order: IExpiryDateComputeInput<K>): Date {
+    const { quantity, starts } = order;
+    const date = new Date(starts);
 
-    switch (cycle) {
+    switch (order.cycle) {
       case "once":
         return date;
       case "daily":
@@ -401,6 +432,8 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       case "yearly":
         return addYears(date, quantity);
       case "custom":
+        // eslint-disable-next-line no-case-declarations
+        const { customCycle } = order;
         if (customCycle !== undefined && customCycle >= 0) {
           return addSeconds(date, customCycle * quantity);
         }
@@ -411,23 +444,190 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     throw new Error("Invalid or missing cycle value");
   }
 
-  protected async computeStartDate(order: IOrder<K>): Promise<void> {
-    if (order.starts) return;
-
-    const orderList: IOrder<K>[] = await this.orderDao.find({
-      expires: { $exists: true },
-      offerGroup: order.offerGroup,
-      status: "paid",
-      userId: order.userId,
-    });
-    if (!orderList || orderList.length == 0) {
-      order.starts = new Date();
+  /**
+   * Computes the start date for an order based on the specified logic.
+   * If an explicit start date is provided, it is used unless it has passed.
+   * If no explicit start date is provided, it is determined based on the appendDate setting.
+   *
+   * @param order - The order for which to compute the start date.
+   * @throws {InvalidOrderError} - If the explicit start date has passed.
+   */
+  protected async computeStartDate(
+    userId: K,
+    order: IExpiryDateComputeInput<K>,
+  ): Promise<void> {
+    const now = new Date();
+    if (order.starts) {
+      if (now.getTime() > order.starts.getTime())
+        throw new InvalidOrderError(
+          "Explicit start date has passed:" + order.starts,
+        );
       return;
     }
 
-    const lastToFirstExpiryDate = orderList.sort(
-      (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0),
+    const offer = await this.offerDao.findById(order.offerId);
+
+    // volatile offers are safely handled here
+    const appendDate = offer?.appendDate ?? false;
+    if (!appendDate) {
+      // If appendDate is false, use Date.now() as the start date
+      order.starts = now;
+    } else {
+      const orderList: IOrder<K>[] = await this.orderDao.find({
+        expires: { $exists: true },
+        offerGroup: order.offerGroup,
+        status: "paid",
+        userId: userId,
+      });
+      if (!orderList || orderList.length == 0) {
+        order.starts = now;
+        return;
+      }
+
+      const lastToFirstExpiryDate = orderList.sort(
+        (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0),
+      );
+      order.starts = lastToFirstExpiryDate[0].expires;
+      if (order.starts.getTime() < now.getTime()) order.starts = now;
+    }
+  }
+
+  protected afterFreeOrderExecuted(order: IOrder<K>) {
+    order.status = "paid";
+    const historyItem = {
+      message: "Free subscription succeeded",
+      status: "paid",
+    } as IOrderStatus;
+    if (!order.history) {
+      order.history = [] as unknown as [IOrderStatus];
+    }
+    historyItem.date = historyItem.date ?? new Date();
+    order.history.push(historyItem);
+    order.markModified("history");
+
+    return order;
+  }
+
+  // Might want to return the order too to indicate it was changed
+  protected async updateCredits(
+    userCredits: IUserCredits<K>,
+    updatedOrder: IOrder<K>,
+  ): Promise<IActivatedOffer | null> {
+    const existingSubscription: ISubscription<K> =
+      userCredits.subscriptions.find((subscription) =>
+        this.equals(subscription.orderId, updatedOrder._id),
+      ) as ISubscription<K>;
+
+    if (!existingSubscription) {
+      throw new PaymentError(
+        `Illegal state: userCredits(${
+          userCredits._id
+        }) has no subscription for orderId (${
+          updatedOrder._id
+        }). Found subscriptions: ${JSON.stringify(userCredits.subscriptions)}`,
+      );
+    }
+
+    existingSubscription.status = updatedOrder.status;
+
+    if (updatedOrder.status === "paid") {
+      // Payment was successful, increment the user's offer tokens
+      // existingSubscription.tokens += updatedOrder.tokenCount || 0;
+      // Modify the offer object as needed
+      // offerGroup
+      const iActivatedOffer = (await this.updateAsPaid(
+        userCredits,
+        updatedOrder,
+      )) as IActivatedOffer;
+
+      // these will be saved by the caller
+      existingSubscription.starts = updatedOrder.starts;
+      existingSubscription.expires = updatedOrder.expires;
+
+      if (updatedOrder.tokenCount) {
+        const tokenTimetableDao = this.getDaoFactory().getTokenTimetableDao();
+        await tokenTimetableDao.create({
+          offerGroup: updatedOrder.offerGroup,
+          tokens: updatedOrder.tokenCount,
+          userId: userCredits.userId,
+        } as Partial<ITokenTimetable<K>>);
+      }
+
+      return iActivatedOffer;
+    }
+
+    return null;
+  }
+
+  // Might want to return the order too to indicate it was changed
+  protected async updateAsPaid(
+    userCredits: IUserCredits<K>,
+    order: IOrder<K>,
+  ): Promise<IActivatedOffer> {
+    if (!order.starts) {
+      await this.computeStartDate(
+        order.userId,
+        order as unknown as IExpiryDateComputeInput<K>,
+      );
+    }
+    // Create a new offer if not found
+    const mainOfferGroupInUserCredits = this.updateOfferGroupTokens(
+      order as ITokenHolder,
+      userCredits,
+      order as unknown as IExpiryDateComputeInput<K>,
     );
-    order.starts = lastToFirstExpiryDate[0].expires;
+
+    if (order.combinedItems && order.combinedItems.length > 0) {
+      for (const orderItemSpec of order.combinedItems) {
+        await this.computeStartDate(
+          order.userId,
+          orderItemSpec as unknown as IExpiryDateComputeInput<K>,
+        );
+
+        this.updateOfferGroupTokens(
+          orderItemSpec as ITokenHolder,
+          userCredits,
+          orderItemSpec as unknown as IExpiryDateComputeInput<K>,
+        );
+      }
+    }
+
+    return mainOfferGroupInUserCredits;
+  }
+
+  protected updateOfferGroupTokens(
+    order: ITokenHolder,
+    userCredits: IUserCredits<K>,
+    expirySpecs: IExpiryDateComputeInput<K>,
+  ) {
+    if (order.tokenCount && order.tokenCount > 0)
+      order.tokenCount = order.tokenCount * (order.quantity || 1);
+
+    const expires = this.calculateExpiryDate(expirySpecs);
+
+    const existingOfferIndex = userCredits.offers.findIndex(
+      (offer) => offer.offerGroup === order.offerGroup,
+    );
+    if (existingOfferIndex !== -1) {
+      // Extend the existing offer with the new information
+      const existingPurchase = userCredits.offers[existingOfferIndex];
+      existingPurchase.expires = expires;
+      if (order.tokenCount) {
+        if (!existingPurchase.tokens) {
+          existingPurchase.tokens = 0;
+        }
+        existingPurchase.tokens += order.tokenCount;
+      }
+      return existingPurchase;
+    }
+
+    const newOffer = {
+      expires,
+      offerGroup: order.offerGroup,
+      starts: expirySpecs.starts,
+      tokens: order.tokenCount,
+    };
+    userCredits.offers.push(newOffer);
+    return newOffer;
   }
 }

@@ -1,7 +1,9 @@
 // Assuming your class is named 'YourClass'
 import { IDaoFactory } from "../../db/dao/IDaoFactory";
 import { IOffer, IOrder, IUserCredits } from "../../db/model/types";
-import { BaseService } from "../BaseService";
+import { InvalidOrderError } from "../../errors";
+import { addDays } from "../../util";
+import { BaseService, IExpiryDateComputeInput } from "../BaseService";
 import { MockDaoFactory } from "./MockDaoFactory";
 
 class BaseServiceTest extends BaseService<string> {
@@ -17,6 +19,10 @@ class BaseServiceTest extends BaseService<string> {
 
   get offerDaoProp() {
     return this.offerDao;
+  }
+
+  get orderDaoProp() {
+    return this.orderDao;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -35,6 +41,20 @@ class BaseServiceTest extends BaseService<string> {
     order: IOrder<string>,
   ) {
     return super.prefillCombinedOrders(offer, offerId, order);
+  }
+
+  async computeStartDateUsingOrder(
+    userId: string,
+    order: IOrder<string>,
+  ): Promise<void> {
+    return super.computeStartDate(
+      userId,
+      order as unknown as IExpiryDateComputeInput<string>,
+    );
+  }
+
+  calculateExpiryDate(order: IExpiryDateComputeInput<string>): Date {
+    return super.calculateExpiryDate(order);
   }
 }
 
@@ -232,9 +252,164 @@ describe("BaseService", () => {
       expect(mockOrder.combinedItems[1].quantity).toBe(2);
       expect(mockOrder.combinedItems[1].tokenCount).toBe(15 * 2);
     });
-
-    // Add more test cases for different scenarios
   });
 
-  // Add more test cases for other methods and scenarios
+  describe("computeStartDate", () => {
+    test("handles explicit start date in the future", async () => {
+      const order = {
+        starts: new Date(Date.now() + 1000000),
+      } as IOrder<string>;
+
+      await expect(
+        service.computeStartDateUsingOrder(order.userId, order),
+      ).resolves.toBeUndefined();
+    });
+
+    test("throws error for explicit start date in the past", async () => {
+      const order = {
+        starts: new Date(Date.now() - 1000000),
+      } as IOrder<string>;
+
+      await expect(
+        service.computeStartDateUsingOrder(order.userId, order),
+      ).rejects.toThrow(InvalidOrderError);
+    });
+
+    test("handles no explicit start date with appendDate set to false", async () => {
+      const order = {
+        offerId: "phoneCalls",
+        starts: null,
+        userId: "mockUserId",
+      } as unknown as IOrder<string>;
+
+      // Mock offer data with appendDate set to false
+      service.offerDaoProp.findById = jest.fn().mockResolvedValue({
+        _id: "phoneCalls",
+        appendDate: false,
+      } as IOffer<string>);
+
+      await service.computeStartDateUsingOrder(order.userId, order);
+
+      expect(order.starts).toBeInstanceOf(Date);
+    });
+
+    test("handles no explicit start date with appendDate set to true and no previous orders", async () => {
+      const order = {
+        offerId: "phoneCalls",
+        starts: null,
+        userId: "mockUserId",
+      } as unknown as IOrder<string>;
+
+      // Mock offer data with appendDate set to true
+      service.offerDaoProp.findById = jest.fn().mockResolvedValue({
+        _id: "phoneCalls",
+        appendDate: true,
+      } as unknown as IOffer<string>);
+
+      service.orderDaoProp.find = jest.fn().mockResolvedValue([]);
+
+      await service.computeStartDateUsingOrder(order.userId, order);
+
+      expect(order.starts).toBeInstanceOf(Date);
+    });
+
+    test("handles no explicit start date with appendDate set to true and previous orders", async () => {
+      const order = {
+        offerId: "phoneCalls",
+        starts: null,
+        userId: "mockUserId",
+      } as unknown as IOrder<string>;
+
+      // Mock offer data with appendDate set to true
+      service.offerDaoProp.findById = jest.fn().mockResolvedValue({
+        _id: "phoneCalls",
+        appendDate: true,
+      } as unknown as IOffer<string>);
+
+      // Mock previous orders
+      service.orderDaoProp.find = jest
+        .fn()
+        .mockResolvedValue([
+          { expires: new Date(Date.now() + 1000000) } as IOrder<string>,
+        ]);
+
+      await service.computeStartDateUsingOrder(order.userId, order);
+
+      expect(order.starts).toBeInstanceOf(Date);
+    });
+    test("handles computed start date in the past", async () => {
+      const order = {
+        offerId: "phoneCalls",
+        starts: null,
+        userId: "mockUserId",
+      } as unknown as IOrder<string>;
+
+      // Mock offer data with appendDate set to true
+      service.offerDaoProp.findById = jest.fn().mockResolvedValue({
+        _id: "phoneCalls",
+        appendDate: true,
+      } as unknown as IOffer<string>);
+
+      // Mock previous orders with an expired one
+      service.orderDaoProp.find = jest
+        .fn()
+        .mockResolvedValue([
+          { expires: new Date(Date.now() - 1000000) } as IOrder<string>,
+        ]);
+
+      await service.computeStartDateUsingOrder(order.userId, order);
+
+      expect(order.starts).toBeInstanceOf(Date);
+      expect(order.starts.getTime()).toBeGreaterThanOrEqual(Date.now());
+    });
+  });
+  describe("calculateExpiryDate", () => {
+    let service: BaseServiceTest;
+
+    beforeEach(() => {
+      service = new BaseServiceTest(new MockDaoFactory());
+    });
+
+    test("calculates expiry date for once cycle", () => {
+      const order = {
+        cycle: "once",
+        quantity: 1,
+        starts: new Date(),
+      } as unknown as IExpiryDateComputeInput<string>;
+
+      const expiryDate = service.calculateExpiryDate(order);
+
+      // Assertions
+      expect(expiryDate).toStrictEqual(order.starts);
+    });
+
+    test("calculates expiry date for daily cycle", () => {
+      const order = {
+        cycle: "daily",
+        quantity: 2,
+        starts: new Date(),
+      } as unknown as IExpiryDateComputeInput<string>;
+
+      const expiryDate = service.calculateExpiryDate(order);
+
+      // Assertions
+      const expectedExpiryDate = addDays(order.starts, 2);
+      expect(expiryDate).toEqual(expectedExpiryDate);
+    });
+
+    // Add more test cases for other cycle types...
+
+    test("throws error for invalid or missing cycle", () => {
+      const order = {
+        cycle: "invalidCycle",
+        quantity: 1,
+        starts: new Date(),
+      } as unknown as IExpiryDateComputeInput<string>;
+
+      // Assertions
+      expect(() => service.calculateExpiryDate(order)).toThrowError(
+        "Invalid or missing cycle value",
+      );
+    });
+  });
 });

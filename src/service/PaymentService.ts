@@ -1,22 +1,18 @@
 import type { IDaoFactory } from "../db/dao/types";
-import type {
-  IActivatedOffer,
-  IMinimalId,
-  IOrder,
-  IOrderStatus,
-  ISubscription,
-  ITokenTimetable,
-  IUserCredits,
-} from "../db/model/types";
+import type { IMinimalId, IOrder, IUserCredits } from "../db/model/types";
 import {
-  EntityNotFoundError,
   InvalidPaymentError,
-  PaymentError,
   PaymentErrorCode,
   PaymentErrorDetails,
 } from "../errors";
 import { BaseService } from "./BaseService";
 import type { IPaymentClient } from "./IPaymentClient";
+
+export type ITokenHolder = {
+  offerGroup: string;
+  quantity: number;
+  tokenCount: number;
+};
 
 export class PaymentService<K extends IMinimalId> extends BaseService<K> {
   constructor(
@@ -89,40 +85,6 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     return userCredits;
   }
 
-  protected afterFreeOrderExecuted(order: IOrder<K>) {
-    order.status = "paid";
-    const historyItem = {
-      message: "Free subscription succeeded",
-      status: "paid",
-    } as IOrderStatus;
-    if (!order.history) {
-      order.history = [] as unknown as [IOrderStatus];
-    }
-    historyItem.date = historyItem.date ?? new Date();
-    order.history.push(historyItem);
-    order.markModified("history");
-
-    return order;
-  }
-
-  async orderStatusChanged(
-    orderId: K,
-    status: "pending" | "paid" | "refused",
-  ): Promise<IOrder<K>> {
-    const order: null | IOrder<K> = await this.orderDao.findById(orderId);
-    if (!order) throw new EntityNotFoundError("IOrder", orderId);
-    order.status = status;
-    await order.save();
-    return order as IOrder<K>;
-  }
-
-  async remainingTokens(userId: K): Promise<IUserCredits<K>> {
-    const userCredits: null | IUserCredits<K> =
-      await this.userCreditsDao.findOne({ userId });
-    if (!userCredits) throw new EntityNotFoundError("IUserCredits", userId);
-    return userCredits;
-  }
-
   protected async payLoadedOrder(order: IOrder<K>) {
     const orderWithIntent = await this.paymentClient.createPaymentIntent(order);
     if (!orderWithIntent)
@@ -140,104 +102,5 @@ export class PaymentService<K extends IMinimalId> extends BaseService<K> {
     //this value should not be saved to db, it is temporary for the transaction only
     updatedOrder.paymentIntentSecret = orderWithIntent.paymentIntentSecret;
     return updatedOrder;
-  }
-
-  // Might want to return the order too to indicate it was changed
-  protected async updateCredits(
-    userCredits: IUserCredits<K>,
-    updatedOrder: IOrder<K>,
-  ): Promise<IActivatedOffer | null> {
-    const existingSubscription: ISubscription<K> =
-      userCredits.subscriptions.find((subscription) =>
-        this.equals(subscription.orderId, updatedOrder._id),
-      ) as ISubscription<K>;
-
-    if (!existingSubscription) {
-      throw new PaymentError(
-        `Illegal state: userCredits(${
-          userCredits._id
-        }) has no subscription for orderId (${
-          updatedOrder._id
-        }). Found subscriptions: ${JSON.stringify(userCredits.subscriptions)}`,
-      );
-    }
-
-    existingSubscription.status = updatedOrder.status;
-
-    if (updatedOrder.status === "paid") {
-      // Payment was successful, increment the user's offer tokens
-      // existingSubscription.tokens += updatedOrder.tokenCount || 0;
-      // Modify the offer object as needed
-      // offerGroup
-      const iActivatedOffer = (await this.updateAsPaid(
-        userCredits,
-        updatedOrder,
-      )) as IActivatedOffer;
-
-      // these will be saved by the caller
-      existingSubscription.starts = updatedOrder.starts;
-      existingSubscription.expires = updatedOrder.expires;
-
-      if (updatedOrder.tokenCount) {
-        const tokenTimetableDao = this.getDaoFactory().getTokenTimetableDao();
-        await tokenTimetableDao.create({
-          offerGroup: updatedOrder.offerGroup,
-          tokens: updatedOrder.tokenCount,
-          userId: userCredits.userId,
-        } as Partial<ITokenTimetable<K>>);
-      }
-
-      return iActivatedOffer;
-    }
-
-    return null;
-  }
-
-  // Might want to return the order too to indicate it was changed
-  protected async updateAsPaid(
-    userCredits: IUserCredits<K>,
-    order: IOrder<K>,
-  ): Promise<IActivatedOffer> {
-    if (!order.starts) {
-      await this.computeStartDate(order);
-    }
-    // Create a new offer if not found
-    order.expires = this.calculateExpiryDate(
-      order.starts,
-      order.cycle,
-      order.quantity,
-    );
-
-    if (order.tokenCount && order.tokenCount > 0)
-      order.tokenCount = order.tokenCount * (order.quantity || 1);
-
-    const existingOfferIndex = userCredits.offers.findIndex(
-      (offer) => offer.offerGroup === order.offerGroup,
-    );
-    if (existingOfferIndex !== -1) {
-      // Extend the existing offer with the new information
-      const existingPurchase = userCredits.offers[existingOfferIndex];
-      existingPurchase.expires = this.calculateExpiryDate(
-        existingPurchase.expires,
-        order.cycle,
-        order.quantity,
-      );
-      if (order.tokenCount) {
-        if (!existingPurchase.tokens) {
-          existingPurchase.tokens = 0;
-        }
-        existingPurchase.tokens += order.tokenCount;
-      }
-      return existingPurchase;
-    }
-
-    const newOffer = {
-      expires: order.expires,
-      offerGroup: order.offerGroup,
-      starts: order.starts,
-      tokens: order.tokenCount,
-    };
-    userCredits.offers.push(newOffer);
-    return newOffer;
   }
 }

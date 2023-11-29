@@ -5,34 +5,114 @@ import { IOfferCycle } from "./IOffer";
 import { IOrderStatus } from "./IOrderStatus";
 
 /**
- * @param K the type of foreign keys (is used for all foreign keys type)
+ * Represents an order entity with details about the order, including date-instruction related information.
+ *
+ * @param {K} - The type of foreign keys used throughout the entity.
  */
 export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
-  combinedItems: ICombinedOrder<K>[];
-  country: string | null;
-  createdAt: Date;
-  currency: string;
-  customCycle: number | null;
-  cycle: IOfferCycle;
-  expires: Date;
-  history: [IOrderStatus] | null;
-  /** Check documentation in @IOffer */
-  offerGroup: string;
-  offerId: K;
   /**
-   * This field value can change if an intent is abandoned: a new intent can be created to complete the payment.
+   * An array of combined orders associated with this order along with quantities and other specifications.
+   * This can be used for example in a mobile operator to propose calling minutes along with an internet quota and a TV package.
+   * The users will still be able to purchase individual offers. Rules applied to {@link IOffer.offerGroup} will be used along with {@link IOffer.appendDate}
+   */
+  combinedItems: ICombinedOrder<K>[];
+
+  /**
+   * The country associated with the order (used at payment time).
+   */
+  country: string | null;
+
+  /**
+   * The date and time when the order was created.
+   */
+  createdAt: Date;
+
+  /**
+   * The currency the order was attempted to be/paid with.
+   */
+  currency: string;
+
+  /**
+   * Custom cycle duration, if {@link IOffer.cycle} == "custom" specified.
+   */
+  customCycle: number | null;
+
+  /**
+   * The standard cycle duration associated with the order.
+   */
+  cycle: IOfferCycle;
+
+  /**
+   * The date and time when the order expires. This can trigger a suppression of the non consumed tokens if {@link IOffer.appendDate} is false
+   */
+  expires: Date;
+
+  /**
+   * History of payment operations, represented as an array of order status entities.
+   */
+  history: [IOrderStatus] | null;
+
+  /**
+   * The offer group to which the order belongs. Check documentation in @IOffer.
+   */
+  offerGroup: string;
+
+  /**
+   * The unique identifier of the associated offer.
+   */
+  offerId: K;
+
+  /**
+   * The payment intent ID associated with the order.
+   * This field value can change if an intent is abandoned,
+   * and a new intent is created to complete the payment.
    */
   paymentIntentId: string | null;
+
   /**
-   * This field is not saved to db, it only carries info during the session
+   * This field is not saved to the database; it only carries information during the session.
+   * The payment intent secret associated with the order.
    */
   paymentIntentSecret: string | null;
+
+  /**
+   * The quantity specified in the order.
+   */
   quantity: number;
+
+  /**
+   * The date and time when the order starts.
+   * If pre-filled, use with caution, as the start date computation will be skipped.
+   */
   starts: Date;
+
+  /**
+   * The current status of the order. For a complete history of statuses you can check {@link history}
+   */
   status: "pending" | "paid" | "refused" | "error" | "inconsistent" | "partial";
+
+  /**
+   * The tax rate associated with the order.
+   */
   taxRate: number | null;
+
+  /**
+   * The count of tokens associated with the order.
+   */
   tokenCount: number | null;
+
+  /**
+   * The total cost of the order.
+   */
   total: number;
+
+  /**
+   * The date and time when the order was last updated.
+   */
   updatedAt: Date;
+
+  /**
+   * The unique identifier of the user/organization associated with the order.
+   */
   userId: K;
 }

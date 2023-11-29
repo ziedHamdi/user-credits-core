@@ -17,8 +17,33 @@ export type IOfferCycle =
  * @param K the type of foreign keys (is used for all foreign keys type)
  */
 export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
+  /**
+   * Determines how the expiry date is handled at the time of purchase.
+   *
+   * If {@link IOrder.starts} is not null, no algorithm is executed: it is used as is, unless the date has passed, in which case, an error occurs.
+   *
+   * If set to true:
+   * - The expiry date extends from the current expiry date of the same offerGroup in {@link IUserCredits.offers[offerGroup]}.
+   * - The extension is by the duration specified in {@link IOffer.cycle}.
+   *
+   * If set to false:
+   * - Otherwise, {@link Date.now()} is used as the start date.
+   * - The expiry date is calculated by adding {@link IOffer.cycle} to the start date.
+   *
+   * When the expiry date is reached:
+   * - Remaining tokens are deducted from the offerGroup.
+   *
+   * The computation of remaining tokens:
+   * - SUM of tokens from {@link ITokenTimeTable} for the period between start and expires.
+   * - This includes added tokens at creation minus all consumptions during that period.
+   *
+   * As the date expires and nothing can be appended to it:
+   * - Unused tokens from that purchase are removed.
+   * NOTE1: the field {@link IOrder.quantity} will always multiply {@link IOffer.cycle} to compute the final expiry date.
+   * NOTE2: It's not recommended to mix offers with different appendDate values in the same "offerGroup" as it can mislead users.
+   */
+  appendDate: boolean;
   asUnlockingOfferGroups(offerGroups: string[], reset?: boolean): string[];
-
   /**
    * Method to set offers this offer depends on
    * @param dependsOnOffers the current offer can be unlocked only by purchasing at least one of dependsOnOffers
@@ -35,20 +60,22 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    */
   combinedItems: ICombinedOffer<K>[];
   /**
+   * The currency in which the price is specified: you can have multiple versions of the same offer with different
+   * currencies, and filter against the customer you're displaying your information to, or have a live currency conversion.
+   */
+  currency: string;
+  /**
    * Only allowed to have a value when cycle=custom. Expresses the order duration before expiry in seconds.
    */
   customCycle: number | null;
-
   /**
    * Specifies how often the offer has to be renewed.
    */
   cycle: IOfferCycle;
-
   /**
    * If true, signals that it unlocks other offers when purchased: check the {@link unlockedBy} field.
    */
   hasDependentOffers: boolean;
-
   kind: "subscription" | "tokens" | "expertise";
   name: string;
   /**
@@ -62,13 +89,9 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    * and change the value of {@link hasDependentOffers} to true.
    */
   offerGroup: string;
-  /**if an exclusive offer has the same key as a regular one, the exclusive offer will override the regular*/
-  overridingKey: string;
   /**
-   * This field allows highlighting an offer for example with the text: "recommended". It is declared as a number to
-   * allow multiple possibilities of highlighting eg. "recommended"=1, "best seller"=2
+   * The unit price in {@link currency}
    */
-  popular: number;
   price: number;
   /**
    * The maximum allowed quantity to buy if any limit exists, or null
@@ -83,7 +106,6 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    * and only one of these tag value for the other offers ("monthly" or "yearly").
    */
   tags: string[];
-
   /**
    * How many tokens this offer attributes to the user when purchased
    */
@@ -99,4 +121,13 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    * {@link weight} is picked.
    */
   weight: number;
+
+  /**if an exclusive offer has the same key as a regular one, the exclusive offer will override the regular*/
+  overridingKey: string;
+
+  /**
+   * This field allows highlighting an offer for example with the text: "recommended". It is declared as a number to
+   * allow multiple possibilities of highlighting eg. "recommended"=1, "best seller"=2
+   */
+  popular: number;
 }

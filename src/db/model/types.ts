@@ -1,5 +1,7 @@
 // types.ts
 
+export type { ICombinedOffer } from "./combine/ICombinedOffer";
+export type { ICombinedOrder } from "./combine/ICombinedOrder";
 export type { IActivatedOffer } from "./IActivatedOffer";
 export type { IBaseEntity } from "./IBaseEntity";
 export type { IMinimalId } from "./IMinimalId";

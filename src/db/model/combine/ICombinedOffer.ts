@@ -5,10 +5,6 @@ import { IMinimalId } from "../IMinimalId";
  */
 export interface ICombinedOffer<K extends IMinimalId> {
   _id: K;
-  /**
-   * Triggers the engine to compute the date of this combined offer independently from the root offer
-   */
-  applyDateComputing: boolean;
 
   /**
    * Specifies the offerGroup to consume tokens from. It is allowed to specify an {@link offerGroup} value different from the one in the offer under {@link offerId}.
