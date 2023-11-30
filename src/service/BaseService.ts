@@ -416,7 +416,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   }
 
   protected calculateExpiryDate(order: IExpiryDateComputeInput<K>): Date {
-    const { quantity, starts } = order;
+    const { quantity = 1, starts } = order;
     const date = new Date(starts);
 
     switch (order.cycle) {
@@ -455,6 +455,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    * If no explicit start date is provided, it is determined based on the appendDate setting.
    *
    * @param order - The order for which to compute the start date.
+   * @param userId - The user for which to compute the start date (by loading if he is already subscribed to something).
    * @throws {InvalidOrderError} - If the explicit start date has passed.
    */
   protected async computeStartDate(
@@ -564,7 +565,28 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return null;
   }
 
-  // Might want to return the order too to indicate it was changed
+  /**
+   * Updates the {@link IOrder} object and handles combined orders after a successful payment.
+   * Also updates the passed {@link IUserCredits} object.
+   *
+   * This method ensures the order and its combined items are correctly processed,
+   * considering date computation and token handling.
+   *
+   * WARNING: Nested offers' {@link IOffer.appendDate} field is treated independently from the root offer.
+   * If you want a combined offer nested subOffers not to be linked with their regular peers,
+   * create a copy of them with a different {@link IOffer.appendDate} value and the same offerGroup.
+   * This way, you will benefit from token addition while controlling the expiry and start dates.
+   *
+   * For example, if a user purchases a phone package with calling hours and internet data,
+   * then adds phone hours, you can control the validity date of the added phone hours by changing
+   * the value of {@link IOffer.appendDate} (and reversely, buying calling hours then a phone package).
+   *
+   * IMPROVEMENT Might want to return the order too to indicate it was changed (or find another naming convention prefix than update, which is confusing)
+   * @param userCredits - The user credits object.
+   * @param order - The order object to update.
+   * @returns The activated offer group in user credits.
+   * @protected
+   */
   protected async updateAsPaid(
     userCredits: IUserCredits<K>,
     order: IOrder<K>,
@@ -589,6 +611,15 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return mainOfferGroupInUserCredits;
   }
 
+  /**
+   * Handles date computation and token updates for a specific order item.
+   *
+   * @param userId - The user ID.
+   * @param orderItemSpec - The order item specifications.
+   * @param userCredits - The user credits object.
+   * @returns The updated offer group for the order item.
+   * @protected
+   */
   protected async handleOrderDateAndTokens(
     userId: K,
     orderItemSpec: IExpiryDateComputeInput<K> & ITokenHolder,
@@ -603,6 +634,15 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     );
   }
 
+  /**
+   * Updates the expiry date and token count of the offer group in user credits based on the order details.
+   *
+   * @param order - The order object.
+   * @param userCredits - The user credits object.
+   * @param expirySpecs - The expiry date computation specifications.
+   * @returns The updated offer group.
+   * @protected
+   */
   protected updateOfferGroupTokens(
     order: ITokenHolder,
     userCredits: IUserCredits<K>,
