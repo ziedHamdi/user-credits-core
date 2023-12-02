@@ -9,7 +9,7 @@ import { ISubscription } from "./ISubscription";
  */
 export interface IUserCredits<K extends IMinimalId> extends IBaseEntity<K> {
   /**
-   * An array of activated offers. There's at most one offer per order with status "paid".
+   * An array of activated offers. There's at most one offer per order. And only when the status has been "paid" at least once.
    * The offerGroup value is used to group multiple offers belonging to the same service.
    * For example, consider the "Mobile TV Basic" offer with multiple subscription options like 1 month, 3 months, and 1 year subscriptions.
    * Subscribing to one of these offers extends the same expiration date and adds tokens to the existing ones.

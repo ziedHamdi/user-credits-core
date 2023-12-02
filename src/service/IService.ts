@@ -1,5 +1,6 @@
 import type { IDaoFactory } from "../db/dao/types";
 import type {
+  IActivatedOffer,
   IMinimalId,
   IOffer,
   IOrder,
@@ -7,6 +8,7 @@ import type {
   IUserCredits,
 } from "../db/model/types";
 
+/* eslint-disable typescript-sort-keys/interface */
 /**
  * This is the main interface for the UserCredits library, allowing clients to interact with pay-as-you-go features.
  *
@@ -26,6 +28,17 @@ export interface IService<K extends IMinimalId> {
    * @returns {Promise<IUserCredits<K>>} A promise that resolves to the updated user credits.
    */
   afterExecute(order: IOrder<K>): Promise<IUserCredits<K>>;
+
+  /**
+   * scans all subscribed offers and determines which are low in tokens
+   * @param userId
+   * @param low
+   *
+   */
+  checkLowTokens(
+    userId: K,
+    low: [{ offerGroup: string; min: number }],
+  ): Promise<[IActivatedOffer] | []>;
 
   /**
    * Creates an order for a user from a selected offer, saving the user's intention to purchase the offer.

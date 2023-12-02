@@ -4,4 +4,7 @@ import { MockBaseDao } from "./MockBaseDao";
 
 export class MockTokenTimetableDao
   extends MockBaseDao<ITokenTimetable<string>>
-  implements ITokenTimetableDao<string, ITokenTimetable<string>> {}
+  implements ITokenTimetableDao<string, ITokenTimetable<string>>
+{
+  consumptionInDateRange = jest.fn();
+}
