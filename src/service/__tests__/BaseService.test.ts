@@ -1,6 +1,11 @@
 // Assuming your class is named 'YourClass'
 import { IDaoFactory } from "../../db/dao/IDaoFactory";
-import { IOffer, IOrder, IUserCredits } from "../../db/model/types";
+import {
+  IActivatedOffer,
+  IOffer,
+  IOrder,
+  IUserCredits,
+} from "../../db/model/types";
 import { InvalidOrderError } from "../../errors";
 import { addDays } from "../../util";
 import type { IExpiryDateComputeInput, ITokenHolder } from "../BaseService";
@@ -423,7 +428,7 @@ describe("BaseService", () => {
   });
   describe("updateOfferGroupTokens", () => {
     let service: BaseServiceTest;
-    let mockUserCredits: { offers: any[]; userId: string };
+    let mockUserCredits: { offers: IActivatedOffer[]; userId: string };
     let mockOrder: ITokenHolder;
     let mockExpirySpecs: IExpiryDateComputeInput<string>;
 
@@ -489,7 +494,61 @@ describe("BaseService", () => {
       expect(mockUserCredits.offers).toHaveLength(1);
       expect(mockUserCredits.offers[0]).toBe(updatedOffer);
     });
-
-    // Add more test cases for different scenarios...
   });
+
+  // describe("updateOfferGroupTokens", () => {
+  //   let service: BaseServiceTest;
+  //   let mockUserCredits: { offers: any[]; userId: string };
+  //   let mockOrder: ITokenHolder;
+  //   let mockExpirySpecs: IExpiryDateComputeInput<string>;
+  //
+  //   beforeEach(() => {
+  //     service = new BaseServiceTest(new MockDaoFactory());
+  //     mockUserCredits = {
+  //       offers: [],
+  //       userId: "mockUserId",
+  //     };
+  //
+  //     mockOrder = {
+  //       offerGroup: "testOfferGroup",
+  //       quantity: 2,
+  //       tokenCount: 10,
+  //     };
+  //
+  //     mockExpirySpecs = {
+  //       cycle: "daily",
+  //       quantity: 2,
+  //       starts: new Date(),
+  //     } as unknown as IExpiryDateComputeInput<string>;
+  //   });
+  //   test("handles order date and tokens", async () => {
+  //     // Mock necessary methods
+  //     service.computeStartDate = jest.fn().mockResolvedValue(new Date());
+  //     service.updateOfferGroupTokens = jest.fn().mockResolvedValue({
+  //       // Set properties as needed
+  //     });
+  //
+  //     // Call the method
+  //     const result = await service.handleOrderDateAndTokens(
+  //       mockOrder.userId,
+  //       mockOrder,
+  //       mockUserCredits,
+  //     );
+  //
+  //     // Assertions
+  //     expect(result).toBeDefined();
+  //     // Add assertions based on your specific logic and expectations
+  //
+  //     // Check if computeStartDate and updateOfferGroupTokens were called
+  //     expect(service.computeStartDate).toHaveBeenCalledWith(
+  //       mockOrder.userId,
+  //       expect.anything(), // Specify the expected orderItemSpec or use expect.anything()
+  //     );
+  //     expect(service.updateOfferGroupTokens).toHaveBeenCalledWith(
+  //       expect.anything(), // Specify the expected orderItemSpec or use expect.anything()
+  //       mockUserCredits,
+  //       expect.anything(), // Specify the expected expirySpecs or use expect.anything()
+  //     );
+  //   });
+  // });
 });

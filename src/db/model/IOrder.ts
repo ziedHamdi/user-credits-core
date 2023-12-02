@@ -7,7 +7,7 @@ import { IOrderStatus } from "./IOrderStatus";
 /**
  * Represents an order entity with details about the order, including date-instruction related information.
  *
- * @param {K} - The type of foreign keys used throughout the entity.
+ * @template {K} - The type of foreign keys used throughout the entity.
  */
 export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
   /**
@@ -61,6 +61,20 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
    * The unique identifier of the associated offer.
    */
   offerId: K;
+
+  /**
+   * Represents an offer that, when combined with other offers in {@link IOffer.combinedItems},
+   * generates orders with a distinct relationship. Each order created in this manner contains a
+   * non-null {@link parentId} field, linking it to the parent order. This approach allows us to
+   * differentiate orders paid individually from those paid as part of a larger transaction.
+   *
+   * While this introduces denormalization and may impact update speed, the performance cost is
+   * incurred only once per item during offer payment. The benefit lies in enhancing database
+   * readability by establishing clear dependencies between parent and child orders.
+   *
+   * @template {K} The type of identifier used for parent-child relationships.
+   */
+  parentId: K;
 
   /**
    * The payment intent ID associated with the order.

@@ -592,6 +592,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     order: IOrder<K>,
   ): Promise<IActivatedOffer> {
     const userId = order.userId;
+
     const mainOfferGroupInUserCredits = await this.handleOrderDateAndTokens(
       userId,
       order as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
@@ -600,11 +601,37 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
     if (order.combinedItems && order.combinedItems.length > 0) {
       for (const orderItemSpec of order.combinedItems) {
+        const offer = (await this.offerDao.findById(
+          orderItemSpec.offerId,
+        )) as IOffer<K>;
+
         await this.handleOrderDateAndTokens(
           userId,
           orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
           userCredits,
         );
+
+        // the tokens, start, and expiry dates are by now computed and stored in userCredits.offers, read them back to insert nested orders
+        const computed = userCredits.offers?.find(
+          (offer) => offer.offerGroup === orderItemSpec.offerGroup,
+        );
+
+        // save the order with its parent id and the computed tokenCount, starts and expiry dates
+        await this.orderDao.create({
+          currency: order.currency,
+          customCycle: offer.customCycle,
+          cycle: offer.cycle,
+          expires: computed?.expires,
+          offerGroup: orderItemSpec.offerGroup,
+          offerId: orderItemSpec.offerId,
+          parentId: order._id,
+          quantity: (orderItemSpec.quantity || 1) * (order.quantity || 1),
+          starts: computed?.starts,
+          status: "paid",
+          tokenCount: computed?.tokens,
+          total: 0,
+          userId,
+        } as IOrder<K>);
       }
     }
 
