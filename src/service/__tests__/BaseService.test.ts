@@ -59,8 +59,11 @@ class BaseServiceTest extends BaseService<string> {
     );
   }
 
-  calculateExpiryDate(order: IExpiryDateComputeInput<string>): Date {
-    return super.calculateExpiryDate(order);
+  calculateExpiryDate(
+    order: IExpiryDateComputeInput<K>,
+    quantity: number,
+  ): Date {
+    return super.calculateExpiryDate(order, quantity);
   }
 
   updateOfferGroupTokens(
@@ -391,7 +394,7 @@ describe("BaseService", () => {
         starts: new Date(),
       } as unknown as IExpiryDateComputeInput<string>;
 
-      const expiryDate = service.calculateExpiryDate(order);
+      const expiryDate = service.calculateExpiryDate(order, quantity);
 
       // Assertions
       expect(expiryDate).toStrictEqual(order.starts);
@@ -404,7 +407,7 @@ describe("BaseService", () => {
         starts: new Date(),
       } as unknown as IExpiryDateComputeInput<string>;
 
-      const expiryDate = service.calculateExpiryDate(order);
+      const expiryDate = service.calculateExpiryDate(order, quantity);
 
       // Assertions
       const expectedExpiryDate = addDays(order.starts, 2);
@@ -421,7 +424,7 @@ describe("BaseService", () => {
       } as unknown as IExpiryDateComputeInput<string>;
 
       // Assertions
-      expect(() => service.calculateExpiryDate(order)).toThrowError(
+      expect(() => service.calculateExpiryDate(order, quantity)).toThrowError(
         "Invalid or missing cycle value",
       );
     });
@@ -471,7 +474,7 @@ describe("BaseService", () => {
       expect(updatedOffer).toBeDefined();
       expect(updatedOffer).toBe(existingOffer);
       expect(updatedOffer.expires).toEqual(
-        service.calculateExpiryDate(mockExpirySpecs),
+        service.calculateExpiryDate(mockExpirySpecs, quantity),
       );
       expect(updatedOffer.tokens).toEqual(5 + 2 * 10);
     });
@@ -486,7 +489,7 @@ describe("BaseService", () => {
       // Assertions
       expect(updatedOffer).toBeDefined();
       expect(updatedOffer.expires).toEqual(
-        service.calculateExpiryDate(mockExpirySpecs),
+        service.calculateExpiryDate(mockExpirySpecs, quantity),
       );
       expect(updatedOffer.tokens).toEqual(mockOrder.tokenCount);
 

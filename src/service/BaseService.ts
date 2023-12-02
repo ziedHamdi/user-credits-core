@@ -415,32 +415,36 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return userCredits;
   }
 
-  protected calculateExpiryDate(order: IExpiryDateComputeInput<K>): Date {
+  protected calculateExpiryDate(
+    order: IExpiryDateComputeInput<K>,
+    quantityMultiplier: number = 1,
+  ): Date {
     const { quantity = 1, starts } = order;
+    const totalQuantity = quantityMultiplier * quantity;
     const date = new Date(starts);
 
     switch (order.cycle) {
       case "once":
         return date;
       case "daily":
-        return addDays(date, quantity);
+        return addDays(date, totalQuantity);
       case "weekly":
-        return addDays(date, 7 * quantity);
+        return addDays(date, 7 * totalQuantity);
       case "bi-weekly":
-        return addDays(date, 14 * quantity);
+        return addDays(date, 14 * totalQuantity);
       case "monthly":
-        return addMonths(date, quantity);
+        return addMonths(date, totalQuantity);
       case "trimester":
-        return addMonths(date, 3 * quantity);
+        return addMonths(date, 3 * totalQuantity);
       case "semester":
-        return addMonths(date, 4 * quantity);
+        return addMonths(date, 4 * totalQuantity);
       case "yearly":
-        return addYears(date, quantity);
+        return addYears(date, totalQuantity);
       case "custom":
         // eslint-disable-next-line no-case-declarations
         const { customCycle } = order;
         if (customCycle !== undefined && customCycle >= 0) {
-          return addSeconds(date, customCycle * quantity);
+          return addSeconds(date, customCycle * totalQuantity);
         }
         break;
     }
@@ -609,6 +613,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           userId,
           orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
           userCredits,
+          order.quantity,
         );
 
         // the tokens, start, and expiry dates are by now computed and stored in userCredits.offers, read them back to insert nested orders
@@ -632,6 +637,13 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           total: 0,
           userId,
         } as IOrder<K>);
+
+        // Insert credits to the user
+        await this.tokenTimetableDao.create({
+          offerGroup: orderItemSpec.offerGroup,
+          tokens: computed?.tokens,
+          userId,
+        } as ITokenTimetable<K>);
       }
     }
 
@@ -644,6 +656,11 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    * @param userId - The user ID.
    * @param orderItemSpec - The order item specifications.
    * @param userCredits - The user credits object.
+   * @param quantity - the ordered quantity, defaults to 1: only used in combined offers to specify how many times a
+   * sub-offer is to be included in a package.
+   *
+   * For example, a phone operator, may include 1000Mb of data. in that case,
+   * the quantity will be 1000 if tokens are consumed by 1Mb or 1.000.000 if they are consumed by 1Kb.
    * @returns The updated offer group for the order item.
    * @protected
    */
@@ -651,6 +668,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     userId: K,
     orderItemSpec: IExpiryDateComputeInput<K> & ITokenHolder,
     userCredits: IUserCredits<K>,
+    quantity: number = 1,
   ) {
     await this.computeStartDate(userId, orderItemSpec);
 
@@ -658,6 +676,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       orderItemSpec,
       userCredits,
       orderItemSpec,
+      quantity,
     );
   }
 
@@ -667,6 +686,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    * @param order - The order object.
    * @param userCredits - The user credits object.
    * @param expirySpecs - The expiry date computation specifications.
+   * @param quantity - the ordered quantity, defaults to 1: only used in combined offers to specify how many times a
+   * sub-offer is to be included in a package.
+   *
    * @returns The updated offer group.
    * @protected
    */
@@ -674,11 +696,12 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     order: ITokenHolder,
     userCredits: IUserCredits<K>,
     expirySpecs: IExpiryDateComputeInput<K>,
+    quantity: number = 1,
   ) {
     if (order.tokenCount && order.tokenCount > 0)
-      order.tokenCount = order.tokenCount * (order.quantity || 1);
+      order.tokenCount = quantity * order.tokenCount * (order.quantity || 1);
 
-    const expires = this.calculateExpiryDate(expirySpecs);
+    const expires = this.calculateExpiryDate(expirySpecs, quantity);
 
     const existingOfferIndex = userCredits.offers.findIndex(
       (offer) => offer.offerGroup === order.offerGroup,
@@ -691,7 +714,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         if (!existingPurchase.tokens) {
           existingPurchase.tokens = 0;
         }
-        existingPurchase.tokens += order.tokenCount;
+        existingPurchase.tokens += order.tokenCount * quantity;
       }
       return existingPurchase;
     }
