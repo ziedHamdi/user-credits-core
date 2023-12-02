@@ -89,6 +89,13 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    * and change the value of {@link hasDependentOffers} to true.
    */
   offerGroup: string;
+  /**if an exclusive offer has the same key as a regular one, the exclusive offer will override the regular*/
+  overridingKey: string;
+  /**
+   * This field allows highlighting an offer for example with the text: "recommended". It is declared as a number to
+   * allow multiple possibilities of highlighting eg. "recommended"=1, "best seller"=2
+   */
+  popular: number;
   /**
    * The unit price in {@link currency}
    */
@@ -110,24 +117,17 @@ export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {
    * How many tokens this offer attributes to the user when purchased
    */
   tokenCount: number | null;
+
   /**
    * An array of offerGroup values informing about which purchased offers unlock access to this offer.
    * For better performance, an offer that unlocks at least one other offer when purchased is marked with
    * {@link hasDependentOffers}=true
    */
   unlockedBy: string[];
+
   /**
    * This field works in conjunction with {@link overridingKey}: when two overrides conflict, the one with the higher
    * {@link weight} is picked.
    */
   weight: number;
-
-  /**if an exclusive offer has the same key as a regular one, the exclusive offer will override the regular*/
-  overridingKey: string;
-
-  /**
-   * This field allows highlighting an offer for example with the text: "recommended". It is declared as a number to
-   * allow multiple possibilities of highlighting eg. "recommended"=1, "best seller"=2
-   */
-  popular: number;
 }
