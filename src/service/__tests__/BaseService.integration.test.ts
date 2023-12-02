@@ -58,7 +58,6 @@ class BaseServiceIntegrationTest extends BaseService<string> {
     order: IOrder<string>,
   ): Promise<void> {
     return super.computeStartDate(
-      userId,
       order as unknown as IExpiryDateComputeInput<string>,
     );
   }
@@ -85,10 +84,9 @@ class BaseServiceIntegrationTest extends BaseService<string> {
   }
 
   async computeStartDate(
-    userId: string,
     order: IExpiryDateComputeInput<string>,
   ): Promise<void> {
-    return super.computeStartDate(userId, order);
+    return super.computeStartDate(order);
   }
 
   async updateAsPaid(
@@ -274,13 +272,11 @@ describe("BaseService integration tests", () => {
 
       // Assertions
       expect(result).toBeDefined();
+      console.log(JSON.stringify(result));
       // Add assertions based on your specific logic and expectations
 
       // Check if computeStartDate and updateOfferGroupTokens were called
-      expect(computeStartDateSpy).toHaveBeenCalledWith(
-        mockOrder.userId,
-        mockOrder,
-      );
+      expect(computeStartDateSpy).toHaveBeenCalledWith(mockOrder);
       expect(computeStartDateSpy).toHaveBeenCalledTimes(3);
       expect(updateOfferGroupTokens).toHaveBeenCalledTimes(3);
       expect(updateOfferGroupTokens).toHaveBeenCalledWith(
@@ -333,9 +329,6 @@ describe("BaseService integration tests", () => {
       // Check the calls to orderDao.find
       expect(findOfferByIdMock).toHaveBeenCalledWith(mockOrder.offerId);
 
-      // Restore the original method to avoid interference with other tests
-      jest.restoreAllMocks();
-
       const helpDeskGroup = mockUserCredits.offers.find(
         (offer) => offer.offerGroup === "mockHelpDesk",
       )!;
@@ -359,6 +352,9 @@ describe("BaseService integration tests", () => {
         insertOrder,
         insertTokenTimeTable,
       );
+
+      // Restore the original method to avoid interference with other tests
+      jest.restoreAllMocks();
     });
   });
 });

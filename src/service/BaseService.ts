@@ -35,10 +35,12 @@ export interface IExpiryDateComputeInput<K extends IMinimalId> {
   appendDate: boolean;
   customCycle?: number;
   cycle: IOfferCycle;
+  expires: Date;
   offerGroup: string;
   offerId: K;
   quantity: number;
   starts: Date;
+  userId: K;
 }
 
 export type ITokenHolder = {
@@ -459,11 +461,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    * If no explicit start date is provided, it is determined based on the appendDate setting.
    *
    * @param order - The order for which to compute the start date.
-   * @param userId - The user for which to compute the start date (by loading if he is already subscribed to something).
    * @throws {InvalidOrderError} - If the explicit start date has passed.
    */
   protected async computeStartDate(
-    userId: K,
     order: IExpiryDateComputeInput<K>,
   ): Promise<void> {
     const now = new Date();
@@ -487,7 +487,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         expires: { $exists: true },
         offerGroup: order.offerGroup,
         status: "paid",
-        userId: userId,
+        userId: order.userId,
       });
       if (!orderList || orderList.length == 0) {
         order.starts = now;
@@ -597,7 +597,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   ): Promise<IActivatedOffer> {
     const userId = order.userId;
 
-    const mainOfferGroupInUserCredits = await this.handleOrderDateAndTokens(
+    const mainOfferGroupInUserCredits = await this.updateOrderDateAndTokens(
       userId,
       order as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
       userCredits,
@@ -609,7 +609,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           orderItemSpec.offerId,
         )) as IOffer<K>;
 
-        await this.handleOrderDateAndTokens(
+        await this.updateOrderDateAndTokens(
           userId,
           orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
           userCredits,
@@ -664,14 +664,14 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    * @returns The updated offer group for the order item.
    * @protected
    */
-  protected async handleOrderDateAndTokens(
+  protected async updateOrderDateAndTokens(
     userId: K,
     orderItemSpec: IExpiryDateComputeInput<K> & ITokenHolder,
     userCredits: IUserCredits<K>,
     quantity: number = 1,
   ) {
-    await this.computeStartDate(userId, orderItemSpec);
-
+    await this.computeStartDate(orderItemSpec);
+    orderItemSpec.expires = this.calculateExpiryDate(orderItemSpec, quantity);
     return this.updateOfferGroupTokens(
       orderItemSpec,
       userCredits,
@@ -701,7 +701,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     if (order.tokenCount && order.tokenCount > 0)
       order.tokenCount = quantity * order.tokenCount * (order.quantity || 1);
 
-    const expires = this.calculateExpiryDate(expirySpecs, quantity);
+    const expires = expirySpecs.expires;
 
     const existingOfferIndex = userCredits.offers.findIndex(
       (offer) => offer.offerGroup === order.offerGroup,

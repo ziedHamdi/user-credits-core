@@ -54,7 +54,6 @@ class BaseServiceTest extends BaseService<string> {
     order: IOrder<string>,
   ): Promise<void> {
     return super.computeStartDate(
-      userId,
       order as unknown as IExpiryDateComputeInput<string>,
     );
   }
@@ -377,7 +376,9 @@ describe("BaseService", () => {
       await service.computeStartDateUsingOrder(order.userId, order);
 
       expect(order.starts).toBeInstanceOf(Date);
-      expect(order.starts.getTime()).toBeGreaterThanOrEqual(Date.now());
+      expect(Math.round(order.starts.getTime() / 1000)).toEqual(
+        Math.round(Date.now() / 1000),
+      );
     });
   });
   describe("calculateExpiryDate", () => {
@@ -463,7 +464,8 @@ describe("BaseService", () => {
         tokens: 5,
       } as IActivatedOffer;
       mockUserCredits.offers.push(existingOffer);
-
+      const expiryDate = service.calculateExpiryDate(mockExpirySpecs);
+      mockExpirySpecs.expires = expiryDate;
       const updatedOffer = service.updateOfferGroupTokens(
         mockOrder,
         mockUserCredits as unknown as IUserCredits<string>,
@@ -473,13 +475,13 @@ describe("BaseService", () => {
       // Assertions
       expect(updatedOffer).toBeDefined();
       expect(updatedOffer).toBe(existingOffer);
-      expect(updatedOffer.expires).toEqual(
-        service.calculateExpiryDate(mockExpirySpecs),
-      );
+      expect(updatedOffer.expires).toEqual(expiryDate);
       expect(updatedOffer.tokens).toEqual(5 + 2 * 10);
     });
 
     test("adds new offer group", () => {
+      const expiryDate = service.calculateExpiryDate(mockExpirySpecs);
+      mockExpirySpecs.expires = expiryDate;
       const updatedOffer = service.updateOfferGroupTokens(
         mockOrder,
         mockUserCredits as unknown as IUserCredits<string>,
@@ -488,9 +490,7 @@ describe("BaseService", () => {
 
       // Assertions
       expect(updatedOffer).toBeDefined();
-      expect(updatedOffer.expires).toEqual(
-        service.calculateExpiryDate(mockExpirySpecs),
-      );
+      expect(updatedOffer.expires).toEqual(expiryDate);
       expect(updatedOffer.tokens).toEqual(mockOrder.tokenCount);
 
       // Check if the new offer is added to user credits
@@ -532,7 +532,7 @@ describe("BaseService", () => {
   //     });
   //
   //     // Call the method
-  //     const result = await service.handleOrderDateAndTokens(
+  //     const result = await service.updateOrderDateAndTokens(
   //       mockOrder.userId,
   //       mockOrder,
   //       mockUserCredits,
