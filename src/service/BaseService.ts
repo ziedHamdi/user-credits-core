@@ -357,6 +357,8 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           `The order of the offerGroup ${offerGroup} with id ${order._id} is not expired: its date is still valid`,
         );
 
+      // add what the order brought, then remove what was consumed to obtain the remaining tokens that will have to be deleted as the order expired
+      tokensToSubtract += order.tokenCount || 0;
       tokensToSubtract += await this.tokenTimetableDao.consumptionInDateRange(
         offerGroup,
         order.starts,

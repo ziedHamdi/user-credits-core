@@ -617,6 +617,7 @@ describe("BaseService", () => {
           mockLow,
         );
 
+        // FIXME I still have to check that the correct count of tokens was removed from the offerGroup (and test with multiple paid orders that end the same date)
         // Assert
         expect(result.expired.length).toBe(2);
         expect(result.expired[0].offerGroup).toBe("expiredGroup1");
