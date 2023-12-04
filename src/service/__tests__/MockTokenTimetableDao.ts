@@ -7,4 +7,6 @@ export class MockTokenTimetableDao
   implements ITokenTimetableDao<string, ITokenTimetable<string>>
 {
   consumptionInDateRange = jest.fn();
+
+  checkTokens = jest.fn();
 }

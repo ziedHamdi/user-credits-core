@@ -38,7 +38,7 @@ export interface IService<K extends IMinimalId> {
   checkLowTokens(
     userId: K,
     low: [{ offerGroup: string; min: number }],
-  ): Promise<[IActivatedOffer] | []>;
+  ): Promise<IActivatedOffer[] | []>;
 
   /**
    * Creates an order for a user from a selected offer, saving the user's intention to purchase the offer.

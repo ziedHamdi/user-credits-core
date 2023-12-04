@@ -283,9 +283,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
   async checkLowTokens(
     userId: K,
     low: [{ min: number; offerGroup: string }],
-  ): Promise<[IActivatedOffer] | []> {
+  ): Promise<IActivatedOffer[] | []> {
     const userCredits = await this.userCreditsDao.findById(userId);
-    const toReturn: [IActivatedOffer] | [] = [];
+    const toReturn: IActivatedOffer[] = [];
     if (!userCredits) return toReturn;
 
     for (const group of userCredits.offers) {
@@ -293,8 +293,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
       for (const limit of low) {
         if (group.tokens - (limit?.min || 0) <= 0) {
-          const activatedOffer: IActivatedOffer = group!;
-          toReturn.push(activatedOffer);
+          toReturn.push(group!);
         }
       }
     }

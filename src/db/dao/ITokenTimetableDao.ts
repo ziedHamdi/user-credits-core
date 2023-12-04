@@ -7,7 +7,7 @@ export interface ITokenTimetableDao<
 > extends IBaseDao<K, D> {
   checkTokens(
     startDate: Date,
-    endDate: Date = new Date(),
+    endDate?: Date,
   ): [{ offerGroup: string; totalNegativeTokens: number }];
 
   consumptionInDateRange(
