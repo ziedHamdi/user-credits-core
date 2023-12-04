@@ -1,6 +1,11 @@
 import type { IMinimalId, ITokenTimetable } from "../model/types";
 import type { IBaseDao } from "./IBaseDao";
 
+export type ConsumptionPerOfferGroup = {
+  _id: string;
+  totalTokens: number;
+};
+
 export interface ITokenTimetableDao<
   K extends IMinimalId,
   D extends ITokenTimetable<K>,
@@ -8,7 +13,8 @@ export interface ITokenTimetableDao<
   checkTokens(
     startDate: Date,
     endDate?: Date,
-  ): [{ offerGroup: string; totalNegativeTokens: number }];
+    negative?: boolean,
+  ): Promise<ConsumptionPerOfferGroup[]>;
 
   consumptionInDateRange(
     offerGroup: string,
