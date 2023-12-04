@@ -1,3 +1,5 @@
+import * as console from "console";
+
 import type {
   IDaoFactory,
   IOfferDao,
@@ -17,11 +19,7 @@ import type {
   ITokenTimetable,
   IUserCredits,
 } from "../db/model/types";
-import {
-  EntityNotFoundError,
-  InvalidOrderError,
-  PaymentError,
-} from "../errors";
+import { InvalidOrderError, PaymentError } from "../errors";
 import {
   addDays,
   addMonths,
@@ -262,42 +260,112 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
   abstract payOrder(orderId: K): Promise<IOrder<K>>;
 
-  async orderStatusChanged(
-    orderId: K,
-    status: "pending" | "paid" | "refused",
-  ): Promise<IOrder<K>> {
-    const order: null | IOrder<K> = await this.orderDao.findById(orderId);
-    if (!order) throw new EntityNotFoundError("IOrder", orderId);
-    order.status = status;
-    await order.save();
-    return order as IOrder<K>;
-  }
-
-  async remainingTokens(userId: K): Promise<IUserCredits<K>> {
-    const userCredits: null | IUserCredits<K> =
-      await this.userCreditsDao.findOne({ userId });
-    if (!userCredits) throw new EntityNotFoundError("IUserCredits", userId);
-    return userCredits;
-  }
-
-  async checkLowTokens(
+  /**
+   * Checks for expired orders and warnings based on both expiration date and low token criteria.
+   *
+   * @param userId - The unique identifier of the user.
+   * @param warnBeforeInMillis - Optional parameter specifying the warning duration in milliseconds before an order expires.
+   * @param low - Optional parameter specifying the minimum token limit and the associated offer group to warn the user about low credits.
+   * @returns A promise that resolves to an object containing arrays of expired and warned offers.
+   *
+   * @example
+   * // Example usage:
+   * const userId = "uniqueUserId";
+   * const warningDuration = 86400000; // 24 hours in milliseconds
+   * const lowLimits = [{ min: 10, offerGroup: "GroupA" }, { min: 5, offerGroup: "GroupB" }];
+   * const { expired, warnings } = await yourOfferAndOrdersLibrary.checkForExpiredOrders(userId, warningDuration, lowLimits);
+   * // Result: An object with arrays of expired and warned offers.
+   */
+  async checkForExpiredOrders(
     userId: K,
-    low: [{ min: number; offerGroup: string }],
-  ): Promise<IActivatedOffer[] | []> {
+    warnBeforeInMillis?: number,
+    low?: { min: number; offerGroup: string }[],
+  ): Promise<{
+    expired: IActivatedOffer[] | [];
+    warnings: IActivatedOffer[] | [];
+  }> {
     const userCredits = await this.userCreditsDao.findById(userId);
-    const toReturn: IActivatedOffer[] = [];
-    if (!userCredits) return toReturn;
+    const warnings: IActivatedOffer[] = [];
+    const expired: IActivatedOffer[] = [];
+    if (!userCredits) return { expired, warnings };
+    const now = Date.now();
 
+    // loop over the active offer group states
     for (const group of userCredits.offers) {
-      if (!group || !group?.tokens) continue;
+      if (!group || !group?.expires) continue;
 
-      for (const limit of low) {
-        if (group.tokens - (limit?.min || 0) <= 0) {
-          toReturn.push(group!);
+      if (group.expires.getTime() - now - (warnBeforeInMillis || 0) <= 0) {
+        if (group.expires.getTime() - now <= 0) {
+          expired.push(group);
+          const tokensToSubtract = await this.processExpiredOrderGroup(
+            userId,
+            group.offerGroup,
+          );
+          // this is to cover negative tokens cases
+          if (!group.tokens) group.tokens = 0;
+
+          group.tokens -= tokensToSubtract;
+        } else {
+          warnings.push(group);
+        }
+      }
+
+      if (group.tokens && low) {
+        const limit = low.find(
+          (offerGroupSpec) => offerGroupSpec.offerGroup === group.offerGroup,
+        );
+        if (limit && group.tokens - (limit?.min || 0) <= 0) {
+          warnings.push(group);
         }
       }
     }
-    return toReturn;
+    // if the userCredits object was altered, save changes.
+    if (expired.length > 0) {
+      // Remove the expired group from active groups in userCredits.offers
+      userCredits.offers = userCredits.offers.filter((offer) => {
+        const found = expired.find(
+          (expiredItem) => offer.offerGroup === expiredItem.offerGroup,
+        );
+        return !found; // skip if in the expired list
+      });
+      userCredits.markModified("offers");
+
+      await userCredits.save();
+    }
+
+    return { expired, warnings };
+  }
+
+  protected async processExpiredOrderGroup(
+    userId: K,
+    offerGroup: string,
+  ): Promise<number> {
+    /* eslint-disable sort-keys-fix/sort-keys-fix */
+    // don't sort: order is important for performance
+    const orderList = (await this.orderDao.find({
+      userId,
+      status: "paid",
+      offerGroup,
+    })) as IOrder<K>[];
+    /* eslint-enable sort-keys-fix/sort-keys-fix */
+
+    let tokensToSubtract = 0;
+    // double check the date is expired
+    for (const order of orderList) {
+      if (order.expires.getTime() - Date.now() > 0)
+        throw new InvalidOrderError(
+          `The order of the offerGroup ${offerGroup} with id ${order._id} is not expired: its date is still valid`,
+        );
+
+      tokensToSubtract += await this.tokenTimetableDao.consumptionInDateRange(
+        offerGroup,
+        order.starts,
+        order.expires,
+      );
+      order.status = "expired";
+      await order.save();
+    }
+    return tokensToSubtract;
   }
 
   /**

@@ -50,7 +50,14 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
   /**
    * The status of the subscription, which can be 'pending', 'paid', 'refused', or 'error'.
    */
-  status: "pending" | "paid" | "refused" | "error" | "inconsistent" | "partial";
+  status:
+    | "pending"
+    | "paid"
+    | "refused"
+    | "error"
+    | "inconsistent"
+    | "partial"
+    | "expired";
 
   /**
    * The number of tokens associated with the subscription.

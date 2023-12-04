@@ -272,7 +272,6 @@ describe("BaseService integration tests", () => {
 
       // Assertions
       expect(result).toBeDefined();
-      console.log(JSON.stringify(result));
       // Add assertions based on your specific logic and expectations
 
       // Check if computeStartDate and updateOfferGroupTokens were called

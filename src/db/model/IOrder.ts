@@ -103,7 +103,14 @@ export interface IOrder<K extends IMinimalId> extends IBaseEntity<K> {
   /**
    * The current status of the order. For a complete history of statuses you can check {@link history}
    */
-  status: "pending" | "paid" | "refused" | "error" | "inconsistent" | "partial";
+  status:
+    | "pending"
+    | "paid"
+    | "refused"
+    | "error"
+    | "inconsistent"
+    | "partial"
+    | "expired";
 
   /**
    * The tax rate associated with the order.

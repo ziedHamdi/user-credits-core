@@ -14,5 +14,5 @@ export interface ITokenTimetableDao<
     offerGroup: string,
     startDate: Date,
     endDate?: Date,
-  ): number;
+  ): Promise<number>;
 }

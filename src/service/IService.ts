@@ -30,15 +30,29 @@ export interface IService<K extends IMinimalId> {
   afterExecute(order: IOrder<K>): Promise<IUserCredits<K>>;
 
   /**
-   * scans all subscribed offers and determines which are low in tokens
-   * @param userId
-   * @param low
+   * Checks for expired orders and warnings based on both expiration date and low token criteria.
    *
+   * @param userId - The unique identifier of the user.
+   * @param warnBeforeInMillis - Optional parameter specifying the warning duration in milliseconds before an order expires.
+   * @param low - Optional parameter specifying the minimum token limit and the associated offer group to warn the user about low credits.
+   * @returns A promise that resolves to an object containing arrays of expired and warned offers.
+   *
+   * @example
+   * // Example usage:
+   * const userId = "uniqueUserId";
+   * const warningDuration = 86400000; // 24 hours in milliseconds
+   * const lowLimits = [{ min: 10, offerGroup: "GroupA" }, { min: 5, offerGroup: "GroupB" }];
+   * const { expired, warnings } = await yourOfferAndOrdersLibrary.checkForExpiredOrders(userId, warningDuration, lowLimits);
+   * // Result: An object with arrays of expired and warned offers.
    */
-  checkLowTokens(
+  checkForExpiredOrders(
     userId: K,
-    low: [{ offerGroup: string; min: number }],
-  ): Promise<IActivatedOffer[] | []>;
+    warn?: number,
+    low?: { min: number; offerGroup: string }[],
+  ): Promise<{
+    expired: IActivatedOffer[] | [];
+    warnings: IActivatedOffer[] | [];
+  }>;
 
   /**
    * Creates an order for a user from a selected offer, saving the user's intention to purchase the offer.

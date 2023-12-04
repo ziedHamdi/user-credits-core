@@ -7,7 +7,7 @@ import {
   IUserCredits,
 } from "../../db/model/types";
 import { InvalidOrderError } from "../../errors";
-import { addDays } from "../../util";
+import { addDays, addMonths } from "../../util";
 import type { IExpiryDateComputeInput, ITokenHolder } from "../BaseService";
 import { BaseService } from "../BaseService";
 import { MockDaoFactory } from "./MockDaoFactory";
@@ -29,6 +29,14 @@ class BaseServiceTest extends BaseService<string> {
 
   get orderDaoProp() {
     return this.orderDao;
+  }
+
+  get userCreditsDaoProp() {
+    return this.userCreditsDao;
+  }
+
+  get tokenTimetableDaoProp() {
+    return this.tokenTimetableDao;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -71,6 +79,13 @@ class BaseServiceTest extends BaseService<string> {
     expirySpecs: IExpiryDateComputeInput<string>,
   ) {
     return super.updateOfferGroupTokens(order, userCredits, expirySpecs);
+  }
+
+  processExpiredOrderGroup(
+    userId: string,
+    offerGroup: string,
+  ): Promise<number> {
+    return super.processExpiredOrderGroup(userId, offerGroup);
   }
 }
 
@@ -496,6 +511,141 @@ describe("BaseService", () => {
       // Check if the new offer is added to user credits
       expect(mockUserCredits.offers).toHaveLength(1);
       expect(mockUserCredits.offers[0]).toBe(updatedOffer);
+    });
+  });
+
+  describe("BaseService expiry routines", () => {
+    describe("checkForExpiredOrders", () => {
+      const yesterday = addDays(new Date(), -1);
+      const ago3Months = addMonths(new Date(), -3);
+      const inTenDays = addDays(new Date(), 10);
+      const inTwentyDays = addDays(new Date(), 20);
+
+      const mockOrderSave = jest.fn();
+      const mockUserCreditsSave = jest.fn();
+      const mockMarkModified = jest.fn();
+      // Mocks
+      const mockUserCredits = {
+        markModified: mockMarkModified,
+        offers: [
+          // Add your sample offers here if needed
+        ],
+        save: mockUserCreditsSave,
+        userId: "mockUserId",
+      } as unknown as IUserCredits<string>;
+
+      const mockExpiredActiveOffer1 = {
+        expires: yesterday,
+        offerGroup: "expiredGroup1",
+        tokens: 10,
+      } as IActivatedOffer;
+      const mockExpiredActiveOffer2 = {
+        expires: ago3Months,
+        offerGroup: "expiredGroup2",
+        tokens: 10,
+      } as IActivatedOffer;
+      const mockExpiredOrder = {
+        expires: yesterday,
+        offerGroup: "expiredGroup",
+        save: mockOrderSave,
+        starts: ago3Months,
+        status: "paid",
+      } as unknown as IOrder<string>;
+
+      const mockActiveOrder1 = {
+        expires: inTenDays, // expires in the future
+        offerGroup: "activeGroup1",
+        tokens: 10,
+      } as IActivatedOffer;
+      const mockActiveOrder2 = {
+        expires: inTwentyDays, // expires in the future
+        offerGroup: "activeGroup2",
+        tokens: 10,
+      } as IActivatedOffer;
+
+      const mockLow = [{ min: 5, offerGroup: "expiredGroup" }];
+
+      // Your setup for BaseService
+      let service: BaseServiceTest;
+
+      beforeEach(() => {
+        service = new BaseServiceTest(new MockDaoFactory());
+      });
+
+      afterEach(() => {
+        jest.resetAllMocks();
+      });
+
+      test("marks expired orders as 'expired'", async () => {
+        // Arrange
+        const mockWarnBeforeInMillis = 0; // Immediate expiration for testing purposes
+        mockUserCredits.offers = [
+          mockExpiredActiveOffer1,
+          mockExpiredActiveOffer2,
+          mockActiveOrder1,
+          mockActiveOrder2,
+        ];
+        (service.userCreditsDaoProp.findById as jest.Mock).mockResolvedValue(
+          mockUserCredits,
+        );
+
+        (service.orderDaoProp.find as jest.Mock).mockResolvedValue([
+          mockExpiredOrder,
+        ]);
+        // Act
+        const result = await service.checkForExpiredOrders(
+          mockUserCredits.userId,
+          mockWarnBeforeInMillis,
+          mockLow,
+        );
+
+        // Assert
+        expect(result.expired.length).toBe(2);
+        expect(result.expired[0].offerGroup).toBe("expiredGroup1");
+        expect(result.expired[1].offerGroup).toBe("expiredGroup2");
+
+        expect(mockMarkModified).toHaveBeenCalledTimes(1);
+        expect(mockUserCreditsSave).toHaveBeenCalledTimes(1);
+        expect(mockUserCredits.offers.length).toBe(2);
+        expect(mockUserCredits.offers[0].offerGroup).toBe("activeGroup1");
+        expect(mockUserCredits.offers[1].offerGroup).toBe("activeGroup2");
+
+        expect(mockOrderSave).toHaveBeenCalledTimes(2);
+        expect(mockExpiredOrder.status).toEqual("expired");
+      });
+
+      test("processes expired order group correctly", async () => {
+        // Arrange
+        const mockUserId = "mockUserId";
+        const mockOfferGroup = "expiredGroup";
+        const mockExpiredOrder2 = {
+          ...mockExpiredOrder,
+          _id: "orderId2",
+          expires: ago3Months,
+        };
+
+        const mockOrderList = [mockExpiredOrder, mockExpiredOrder2];
+
+        // Mock the orderDao.find method to return the order list
+        (service.orderDaoProp.find as jest.Mock).mockResolvedValue(
+          mockOrderList,
+        );
+        (
+          service.tokenTimetableDaoProp.consumptionInDateRange as jest.Mock
+        ).mockResolvedValue(-6);
+
+        // Act
+        const tokensToSubtract = await service.processExpiredOrderGroup(
+          mockUserId,
+          mockOfferGroup,
+        );
+
+        // Assert
+        expect(mockOrderSave).toHaveBeenCalledTimes(2);
+        expect(mockExpiredOrder.status).toEqual("expired");
+        expect(mockExpiredOrder2.status).toEqual("expired");
+        expect(tokensToSubtract).toBe(-12);
+      });
     });
   });
 
