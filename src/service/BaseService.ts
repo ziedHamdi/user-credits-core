@@ -294,7 +294,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     for (const group of userCredits.offers) {
       if (!group || !group?.expires) continue;
 
-      if (group.expires.getTime() - now - (warnBeforeInMillis || 0) <= 0) {
+      if (group.expires.getTime() - now <= (warnBeforeInMillis || 0)) {
         if (group.expires.getTime() - now <= 0) {
           expired.push(group);
           const tokensToSubtract = await this.processExpiredOrderGroup(
