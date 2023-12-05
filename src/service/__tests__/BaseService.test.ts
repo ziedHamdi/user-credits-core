@@ -637,18 +637,24 @@ describe("BaseService", () => {
         // Arrange
         const mockUserId = "mockUserId";
         const mockOfferGroup = "expiredGroup";
+        const mockActiveOrder1 = {
+          ...mockExpiredOrder,
+          _id: "orderId2",
+          expires: inTenDays,
+          status: "paid",
+        };
         const mockExpiredOrder2 = {
           ...mockExpiredOrder,
           _id: "orderId2",
           expires: ago3Months,
         };
 
-        const mockOrderList = [mockExpiredOrder, mockExpiredOrder2];
-
         // Mock the orderDao.find method to return the order list
-        (service.orderDaoProp.find as jest.Mock).mockResolvedValue(
-          mockOrderList,
-        );
+        (service.orderDaoProp.find as jest.Mock).mockResolvedValue([
+          mockExpiredOrder,
+          mockActiveOrder1,
+          mockExpiredOrder2,
+        ]);
         (
           service.tokenTimetableDaoProp.consumptionInDateRange as jest.Mock
         ).mockResolvedValue(-6);
@@ -662,6 +668,7 @@ describe("BaseService", () => {
         // Assert
         expect(mockOrderSave).toHaveBeenCalledTimes(2);
         expect(mockExpiredOrder.status).toEqual("expired");
+        expect(mockActiveOrder1.status).toEqual("paid"); // remains untouched
         expect(mockExpiredOrder2.status).toEqual("expired");
         expect(tokensToSubtract).toBe(-12);
       });
@@ -694,20 +701,6 @@ describe("BaseService", () => {
         // Assert
         expect(result.warnings.length).toBe(1);
         expect(result.warnings[0].offerGroup).toBe("imminentExpiryGroup");
-      });
-
-      test("throws an exception for invalid order expiration date", async () => {
-        // Arrange
-        mockExpiredOrder.expires = inTenDays;
-        (service.orderDaoProp.find as jest.Mock).mockResolvedValue([
-          mockExpiredOrder,
-        ]);
-
-        // Act and Assert
-        await expect(
-          // if the date is not expired, the method refuses to execute
-          service.processExpiredOrderGroup("any", "anyGroup"),
-        ).rejects.toThrowError(`The order of the offerGroup anyGroup`);
       });
     });
   });

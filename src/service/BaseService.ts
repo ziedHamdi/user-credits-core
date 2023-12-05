@@ -336,6 +336,21 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     return { expired, warnings };
   }
 
+  /**
+   * Processes the expiration of orders within a specific offer group for a user.
+   *
+   * @protected
+   * @param {string} userId - The unique identifier of the user.
+   * @param {string} offerGroup - The offer group for which to process expired orders.
+   * @returns {Promise<number>} A promise that resolves to the total tokens to subtract as a result of processing expired orders.
+   *
+   * @example
+   * // Example usage:
+   * const userId = "uniqueUserId";
+   * const offerGroup = "GroupA";
+   * const tokensToSubtract = await yourOfferAndOrdersLibrary.processExpiredOrderGroup(userId, offerGroup);
+   * // Result: Total tokens subtracted as a result of processing expired orders in the specified offer group.
+   */
   protected async processExpiredOrderGroup(
     userId: K,
     offerGroup: string,
@@ -352,11 +367,10 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     let tokensToSubtract = 0;
     // double check the date is expired
     for (const order of orderList) {
-      if (order.expires.getTime() - Date.now() > 0)
-        throw new InvalidOrderError(
-          `The order of the offerGroup ${offerGroup} with id ${order._id} is not expired: its date is still valid`,
-        );
-
+      if (order.expires.getTime() - Date.now() > 0) {
+        // leave the paid orders that didn't expire untouched
+        continue;
+      }
       // add what the order brought, then remove what was consumed to obtain the remaining tokens that will have to be deleted as the order expired
       tokensToSubtract += order.tokenCount || 0;
       tokensToSubtract += await this.tokenTimetableDao.consumptionInDateRange(
