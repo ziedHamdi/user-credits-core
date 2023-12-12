@@ -98,11 +98,13 @@ class BaseServiceIntegrationTest extends BaseService<string> {
 }
 
 function roundTimeToSecond(date: Date) {
-  return Math.round(date.getTime() / 1000);
+  return Math.round(date.getTime() / 1000) * 1000;
 }
 
 function expectDatesEqualInSeconds(date: Date, now: Date) {
-  expect(roundTimeToSecond(date)).toEqual(roundTimeToSecond(now)); // appendDate is false
+  expect(new Date(roundTimeToSecond(date))).toEqual(
+    new Date(roundTimeToSecond(now)),
+  );
 }
 
 describe("BaseService integration tests", () => {
@@ -121,6 +123,7 @@ describe("BaseService integration tests", () => {
     const lastExpiryDateForNestedOrders = addMonths(now, 7);
 
     const rootOfferProps = {
+      appendDate: false,
       cycle: "weekly",
       offerGroup: "mockHelpDesk",
       offerId: "mockOfferId",

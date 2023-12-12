@@ -14,6 +14,16 @@ export type IOfferCycle =
   | "custom";
 
 /**
+ * Use this type when you load combinedOffers along with the offer object
+ */
+export type IOfferWithCombinedOffers<K extends IMinimalId> = IOffer<K> & {
+  /**
+   * Offer ids in combinedItems can optionally be read to this field (in some cases)
+   */
+  combinedOffers: IOffer<K>[];
+};
+
+/**
  * @param K the type of foreign keys (is used for all foreign keys type)
  */
 export interface IOffer<K extends IMinimalId> extends IBaseEntity<K> {

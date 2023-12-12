@@ -5,7 +5,7 @@ export type { ICombinedOrder } from "./combine/ICombinedOrder";
 export type { IActivatedOffer } from "./IActivatedOffer";
 export type { IBaseEntity } from "./IBaseEntity";
 export type { IMinimalId } from "./IMinimalId";
-export type { IOffer, IOfferCycle } from "./IOffer";
+export type { IOffer, IOfferCycle, IOfferWithCombinedOffers } from "./IOffer";
 export type { IOrder } from "./IOrder";
 export type { IOrderStatus } from "./IOrderStatus";
 export type { ISubscription } from "./ISubscription";

@@ -713,9 +713,13 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           orderItemSpec.offerId,
         )) as IOffer<K>;
 
+        const orderComputeInput =
+          orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder;
+        orderComputeInput.cycle = orderComputeInput.cycle ?? order.cycle; // if cycle is not defined in the nested offer spec, it will be taken from the parent order
+
         await this.updateOrderDateAndTokens(
           userId,
-          orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
+          orderComputeInput,
           userCredits,
           order.quantity,
         );
