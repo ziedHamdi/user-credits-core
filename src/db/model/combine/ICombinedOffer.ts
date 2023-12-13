@@ -1,10 +1,21 @@
 import { IMinimalId } from "../IMinimalId";
+import { IOfferCycle } from "../IOffer";
 
 /**
  * Represents an offer meta data when combined in a {@link IOffer} offer
  */
 export interface ICombinedOffer<K extends IMinimalId> {
   _id: K;
+
+  /**
+   * Only allowed to have a value when cycle=custom. Expresses the order duration before expiry in seconds.
+   */
+  customCycle: number | null;
+
+  /**
+   * In some cases an offer can include a trial period of something, eg. internet TV package, for a period lower than the offer.
+   */
+  cycle: IOfferCycle;
 
   /**
    * Specifies the offerGroup to consume tokens from. It is allowed to specify an {@link offerGroup} value different from the one in the offer under {@link offerId}.

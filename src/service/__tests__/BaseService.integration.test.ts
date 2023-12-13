@@ -140,8 +140,13 @@ describe("BaseService integration tests", () => {
     const rootOfferProps = {
       appendDate: false,
       combinedItems: [
-        { ...nestedCallsOfferProps } as unknown as ICombinedOffer<string>,
-        { ...nestedDataOfferProps } as unknown as ICombinedOffer<string>,
+        {
+          ...nestedCallsOfferProps,
+        } as unknown as ICombinedOffer<string>,
+        {
+          ...nestedDataOfferProps,
+          cycle: undefined,
+        } as unknown as ICombinedOffer<string>,
       ],
       cycle: "weekly",
       offerGroup: "mockHelpDesk",
@@ -215,13 +220,13 @@ describe("BaseService integration tests", () => {
       insertOrder: CreateOrderSpy,
       insertTokenTimeTable: CreateTokenTimeTableSpy,
     ) {
-      const callsGroup = mockUserCredits.offers.find(
+      const creditsGroup = mockUserCredits.offers.find(
         (offer) => offer.offerGroup === combinedOrder.offerGroup,
       )! as unknown as IActivatedOffer;
-      expect(callsGroup).toBeDefined();
-      expectDatesEqualInSeconds(callsGroup.starts, expectedStart);
+      expect(creditsGroup).toBeDefined();
+      expectDatesEqualInSeconds(creditsGroup.starts, expectedStart);
       expectDatesEqualInSeconds(
-        callsGroup.expires,
+        creditsGroup.expires,
         addMonths(expectedStart, mockOrder.quantity * combinedOrder.quantity),
       );
 
@@ -229,9 +234,9 @@ describe("BaseService integration tests", () => {
         // first argument of dao.create is the order
         return call.offerId === combinedOrder.offerId;
       })! as unknown as [IOrder<string>];
-      expect(insertedCallsOrder.starts).toEqual(callsGroup.starts);
-      expect(insertedCallsOrder.expires).toEqual(callsGroup.expires);
-      expect(insertedCallsOrder.tokenCount).toEqual(callsGroup.tokens);
+      expect(insertedCallsOrder.starts).toEqual(creditsGroup.starts);
+      expect(insertedCallsOrder.expires).toEqual(creditsGroup.expires);
+      expect(insertedCallsOrder.tokenCount).toEqual(creditsGroup.tokens);
 
       const [insertedCallsTokenTimeTable] =
         insertTokenTimeTable.mock.calls.find(([createCall]) => {
@@ -273,10 +278,8 @@ describe("BaseService integration tests", () => {
         "create",
       ) as CreateTokenTimeTableSpy;
       // Call the method
-      const result = await service.updateAsPaid(
-        { ...mockUserCredits },
-        mockOrder,
-      );
+      const userCreditsResult = { ...mockUserCredits };
+      const result = await service.updateAsPaid(userCreditsResult, mockOrder);
 
       // Assertions
       expect(result).toBeDefined();
@@ -284,7 +287,7 @@ describe("BaseService integration tests", () => {
 
       // Check if computeStartDate and updateOfferGroupTokens were called
       expect(computeStartDateSpy).toHaveBeenCalledWith(mockOrder);
-      expect(computeStartDateSpy).toHaveBeenCalledTimes(3);
+      expect(computeStartDateSpy).toHaveBeenCalledTimes(2);
       expect(updateOfferGroupTokens).toHaveBeenCalledTimes(3);
       expect(updateOfferGroupTokens).toHaveBeenCalledWith(
         mockOrder,
@@ -303,18 +306,18 @@ describe("BaseService integration tests", () => {
       expect(insertOrder).toHaveBeenCalledTimes(2);
       expect(insertOrder).toHaveBeenCalledWith(
         expect.objectContaining({
+          ...nestedCallsOfferProps,
           currency: "$",
           customCycle: now,
           parentId: "mockOrderId",
-          status: "paid",
-          total: 0,
-          userId: "mockUserId",
-          ...nestedCallsOfferProps,
           quantity: mockOrder.quantity * nestedCallsOfferProps.quantity,
+          status: "paid",
           tokenCount:
             mockOrder.quantity *
             nestedCallsOfferProps.quantity *
             nestedCallsOfferProps.tokenCount,
+          total: 0,
+          userId: "mockUserId",
         }),
       );
       expect(insertOrder).toHaveBeenCalledWith(
@@ -353,11 +356,42 @@ describe("BaseService integration tests", () => {
         insertTokenTimeTable,
       );
 
-      testNestedOrder(
-        nestedDataOfferProps,
-        now,
-        insertOrder,
-        insertTokenTimeTable,
+      const creditsDataGroup = mockUserCredits.offers.find(
+        (offer) => offer.offerGroup === nestedDataOfferProps.offerGroup,
+      )! as unknown as IActivatedOffer;
+      expect(creditsDataGroup).toBeDefined();
+      expectDatesEqualInSeconds(creditsDataGroup.starts, now);
+      expectDatesEqualInSeconds(
+        creditsDataGroup.expires,
+        addDays(now, mockOrder.quantity * 7),
+      );
+
+      const rootTokens = userCreditsResult.offers.find(
+        (item) => item.offerGroup === "mockHelpDesk",
+      );
+      expect(rootTokens).toBeDefined();
+      expect(rootTokens!.tokens).toEqual(
+        mockOrder.quantity * rootOfferProps.tokens,
+      );
+
+      const aiTokens = userCreditsResult.offers.find(
+        (item) => item.offerGroup === "calls",
+      );
+      expect(aiTokens).toBeDefined();
+      expect(aiTokens!.tokens).toEqual(
+        mockOrder.quantity *
+          nestedCallsOfferProps.quantity *
+          nestedCallsOfferProps.tokenCount,
+      );
+
+      const dataTokens = userCreditsResult.offers.find(
+        (item) => item.offerGroup === "data",
+      );
+      expect(dataTokens).toBeDefined();
+      expect(dataTokens!.tokens).toEqual(
+        mockOrder.quantity *
+          nestedDataOfferProps.quantity *
+          nestedDataOfferProps.tokenCount,
       );
 
       // Restore the original method to avoid interference with other tests

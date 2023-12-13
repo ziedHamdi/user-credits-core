@@ -6,6 +6,10 @@ import type { IOfferCycle } from "../IOffer";
  */
 export interface ICombinedOrder<K extends IMinimalId> {
   /**
+   * Only allowed to have a value when cycle=custom. Expresses the order duration before expiry in seconds.
+   */
+  customCycle: number | null;
+  /**
    * In some cases an offer can include a trial period of something, eg. internet TV package, for a period lower than the offer.
    */
   cycle: IOfferCycle;

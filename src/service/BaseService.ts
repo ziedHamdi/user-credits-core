@@ -724,14 +724,23 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
         const orderComputeInput =
           orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder;
-        orderComputeInput.cycle = orderComputeInput.cycle ?? order.cycle; // if cycle is not defined in the nested offer spec, it will be taken from the parent order
-
-        await this.updateOrderDateAndTokens(
-          userId,
-          orderComputeInput,
-          userCredits,
-          order.quantity,
-        );
+        if (orderComputeInput.cycle) {
+          await this.updateOrderDateAndTokens(
+            userId,
+            orderComputeInput,
+            userCredits,
+            order.quantity,
+          );
+        } else {
+          orderComputeInput.starts = mainOfferGroupInUserCredits.starts;
+          orderComputeInput.expires = mainOfferGroupInUserCredits.expires;
+          this.updateOfferGroupTokens(
+            orderComputeInput,
+            userCredits,
+            orderComputeInput,
+            order.quantity,
+          );
+        }
 
         // the tokens, start, and expiry dates are by now computed and stored in userCredits.offers, read them back to insert nested orders
         const computed = userCredits.offers?.find(
