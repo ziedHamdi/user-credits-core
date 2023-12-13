@@ -570,14 +570,14 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
    */
   protected async computeStartDate(
     order: IExpiryDateComputeInput<K>,
-  ): Promise<void> {
+  ): Promise<Date> {
     const now = new Date();
     if (order.starts) {
       if (now.getTime() > order.starts.getTime())
         throw new InvalidOrderError(
           "Explicit start date has passed:" + order.starts,
         );
-      return;
+      return order.starts;
     }
 
     const offer = await this.offerDao.findById(order.offerId);
@@ -586,7 +586,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     const appendDate = offer?.appendDate ?? false;
     if (!appendDate) {
       // If appendDate is false, use Date.now() as the start date
-      order.starts = now;
+      return now;
     } else {
       const orderList: IOrder<K>[] = await this.orderDao.find({
         expires: { $exists: true },
@@ -595,15 +595,14 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         userId: order.userId,
       });
       if (!orderList || orderList.length == 0) {
-        order.starts = now;
-        return;
+        return now;
       }
 
       const lastToFirstExpiryDate = orderList.sort(
         (a, b) => (b.expires?.getTime() || 0) - (a.expires?.getTime() || 0),
       );
-      order.starts = lastToFirstExpiryDate[0].expires;
-      if (order.starts.getTime() < now.getTime()) order.starts = now;
+      const starts = lastToFirstExpiryDate[0].expires;
+      return starts.getTime() > now.getTime() ? starts : now;
     }
   }
 
@@ -701,13 +700,20 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     userCredits: IUserCredits<K>,
     order: IOrder<K>,
   ): Promise<IActivatedOffer> {
-    const userId = order.userId;
-
-    const mainOfferGroupInUserCredits = await this.updateOrderDateAndTokens(
-      userId,
-      order as unknown as IExpiryDateComputeInput<K> & ITokenHolder,
-      userCredits,
+    const starts = await this.computeStartDate(
+      order as unknown as IExpiryDateComputeInput<K>,
     );
+    order.starts = starts;
+    const expires = this.calculateExpiryDate(
+      order as unknown as IExpiryDateComputeInput<K>,
+    );
+    const activeOffer = {
+      expires,
+      offerGroup: order.offerGroup,
+      starts,
+      tokens: order.quantity * (order.tokenCount || 0),
+    };
+    this.appendOrPushActiveOffer(userCredits, activeOffer);
 
     const offer = await this.offerDao.findById(order.offerId);
     if (!offer) {
@@ -723,7 +729,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       }
     }
 
-    return mainOfferGroupInUserCredits;
+    return activeOffer;
   }
 
   protected async updateNestedItemAsPaid(
@@ -734,6 +740,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     const offer = (await this.offerDao.findById(
       orderItemSpec.offerId,
     )) as IOffer<K>;
+
     await this.updateNestedItemDateAndTokens(
       offer,
       rootOrder,
@@ -790,105 +797,50 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       orderComputeInput.tokenCount = offer.tokenCount;
     }
 
+    let starts;
+    let expires;
+
     if (orderComputeInput.cycle) {
-      await this.updateOrderDateAndTokens(
-        userCredits.userId,
-        orderComputeInput,
-        userCredits,
+      starts = await this.computeStartDate(orderComputeInput);
+      expires = this.calculateExpiryDate(
+        { ...orderComputeInput, starts },
         rootOrder.quantity,
       );
     } else {
-      const mainOfferGroupInUserCredits = userCredits.offers.find(
+      const rootActiveOffer = userCredits.offers.find(
         (item) => item.offerGroup === rootOrder.offerGroup,
       );
-
-      orderComputeInput.starts = mainOfferGroupInUserCredits!.starts;
-      orderComputeInput.expires = mainOfferGroupInUserCredits!.expires;
-      this.updateOfferGroupTokens(
-        orderComputeInput,
-        userCredits,
-        orderComputeInput,
-        rootOrder.quantity,
-      );
+      starts = rootActiveOffer!.starts;
+      expires = rootActiveOffer!.expires;
     }
-  }
-
-  /**
-   * Handles date computation and token updates for a specific order item.
-   *
-   * @param userId - The user ID.
-   * @param orderItemSpec - The order item specifications.
-   * @param userCredits - The user credits object.
-   * @param quantity - the ordered quantity, defaults to 1: only used in combined offers to specify how many times a
-   * sub-offer is to be included in a package.
-   *
-   * For example, a phone operator, may include 1000Mb of data. in that case,
-   * the quantity will be 1000 if tokens are consumed by 1Mb or 1.000.000 if they are consumed by 1Kb.
-   * @returns The updated offer group for the order item.
-   * @protected
-   */
-  protected async updateOrderDateAndTokens(
-    userId: K,
-    orderItemSpec: IExpiryDateComputeInput<K> & ITokenHolder,
-    userCredits: IUserCredits<K>,
-    quantity: number = 1,
-  ) {
-    await this.computeStartDate(orderItemSpec);
-    orderItemSpec.expires = this.calculateExpiryDate(orderItemSpec, quantity);
-    return this.updateOfferGroupTokens(
-      orderItemSpec,
-      userCredits,
-      orderItemSpec,
-      quantity,
-    );
-  }
-
-  /**
-   * Updates the expiry date and token count of the offer group in user credits based on the order details.
-   *
-   * @param order - The order object.
-   * @param userCredits - The user credits object.
-   * @param expirySpecs - The expiry date computation specifications.
-   * @param quantity - the ordered quantity, defaults to 1: only used in combined offers to specify how many times a
-   * sub-offer is to be included in a package.
-   *
-   * @returns The updated offer group.
-   * @protected
-   */
-  protected updateOfferGroupTokens(
-    order: ITokenHolder,
-    userCredits: IUserCredits<K>,
-    expirySpecs: IExpiryDateComputeInput<K>,
-    quantity: number = 1,
-  ) {
-    if (order.tokenCount && order.tokenCount > 0)
-      order.tokenCount = quantity * order.tokenCount * (order.quantity || 1);
-
-    const expires = expirySpecs.expires;
-
-    const existingOfferIndex = userCredits.offers.findIndex(
-      (offer) => offer.offerGroup === order.offerGroup,
-    );
-    if (existingOfferIndex !== -1) {
-      // Extend the existing offer with the new information
-      const existingPurchase = userCredits.offers[existingOfferIndex];
-      existingPurchase.expires = expires;
-      if (order.tokenCount) {
-        if (!existingPurchase.tokens) {
-          existingPurchase.tokens = 0;
-        }
-        existingPurchase.tokens += order.tokenCount * quantity;
-      }
-      return existingPurchase;
-    }
-
-    const newOffer = {
+    const activeOffer = {
       expires,
-      offerGroup: order.offerGroup,
-      starts: expirySpecs.starts,
-      tokens: order.tokenCount,
+      offerGroup: orderItemSpec.offerGroup,
+      starts,
+      tokens:
+        rootOrder.quantity *
+        orderComputeInput.quantity *
+        orderComputeInput.tokenCount,
     };
-    userCredits.offers.push(newOffer);
-    return newOffer;
+
+    this.appendOrPushActiveOffer(userCredits, activeOffer);
+  }
+
+  protected appendOrPushActiveOffer(
+    userCredits: IUserCredits<K>,
+    activeOffer: IActivatedOffer,
+  ) {
+    const found = userCredits.offers.find(
+      (offer) => offer.offerGroup === activeOffer.offerGroup,
+    );
+    if (found) {
+      found.expires = activeOffer.expires;
+      found.starts = activeOffer.starts;
+      if (found.tokens) {
+        if (activeOffer.tokens) found.tokens += activeOffer.tokens;
+      }
+    } else {
+      userCredits.offers.push(activeOffer);
+    }
   }
 }

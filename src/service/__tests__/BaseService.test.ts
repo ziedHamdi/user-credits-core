@@ -8,9 +8,19 @@ import {
 } from "../../db/model/types";
 import { InvalidOrderError } from "../../errors";
 import { addDays, addMonths } from "../../util";
-import type { IExpiryDateComputeInput, ITokenHolder } from "../BaseService";
+import type { IExpiryDateComputeInput } from "../BaseService";
 import { BaseService } from "../BaseService";
 import { MockDaoFactory } from "./MockDaoFactory";
+
+function roundTimeToSecond(date: Date) {
+  return Math.round(date.getTime() / 1000) * 1000;
+}
+
+function expectDatesEqualInSeconds(date: Date, now: Date) {
+  expect(new Date(roundTimeToSecond(date))).toEqual(
+    new Date(roundTimeToSecond(now)),
+  );
+}
 
 class BaseServiceTest extends BaseService<string> {
   //make protected fields public for testing
@@ -61,7 +71,7 @@ class BaseServiceTest extends BaseService<string> {
   async computeStartDateUsingOrder(
     userId: string,
     order: IOrder<string>,
-  ): Promise<void> {
+  ): Promise<Date> {
     return super.computeStartDate(
       order as unknown as IExpiryDateComputeInput<string>,
     );
@@ -72,14 +82,6 @@ class BaseServiceTest extends BaseService<string> {
     quantity: number = 1,
   ): Date {
     return super.calculateExpiryDate(order, quantity);
-  }
-
-  updateOfferGroupTokens(
-    order: ITokenHolder,
-    userCredits: IUserCredits<string>,
-    expirySpecs: IExpiryDateComputeInput<string>,
-  ) {
-    return super.updateOfferGroupTokens(order, userCredits, expirySpecs);
   }
 
   processExpiredOrderGroup(
@@ -294,7 +296,7 @@ describe("BaseService", () => {
 
       await expect(
         service.computeStartDateUsingOrder(order.userId, order),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(order.starts);
     });
 
     test("throws error for explicit start date in the past", async () => {
@@ -320,9 +322,12 @@ describe("BaseService", () => {
         appendDate: false,
       } as IOffer<string>);
 
-      await service.computeStartDateUsingOrder(order.userId, order);
+      const starts = await service.computeStartDateUsingOrder(
+        order.userId,
+        order,
+      );
 
-      expect(order.starts).toBeInstanceOf(Date);
+      expect(starts).toBeInstanceOf(Date);
     });
 
     test("handles no explicit start date with appendDate set to true and no previous orders", async () => {
@@ -340,9 +345,12 @@ describe("BaseService", () => {
 
       service.orderDaoProp.find = jest.fn().mockResolvedValue([]);
 
-      await service.computeStartDateUsingOrder(order.userId, order);
+      const starts = await service.computeStartDateUsingOrder(
+        order.userId,
+        order,
+      );
 
-      expect(order.starts).toBeInstanceOf(Date);
+      expect(starts).toBeInstanceOf(Date);
     });
 
     test("handles no explicit start date with appendDate set to true and previous orders", async () => {
@@ -365,9 +373,12 @@ describe("BaseService", () => {
           { expires: new Date(Date.now() + 1000000) } as IOrder<string>,
         ]);
 
-      await service.computeStartDateUsingOrder(order.userId, order);
+      const starts = await service.computeStartDateUsingOrder(
+        order.userId,
+        order,
+      );
 
-      expect(order.starts).toBeInstanceOf(Date);
+      expect(starts).toBeInstanceOf(Date);
     });
     test("handles computed start date in the past", async () => {
       const order = {
@@ -389,12 +400,13 @@ describe("BaseService", () => {
           { expires: new Date(Date.now() - 1000000) } as IOrder<string>,
         ]);
 
-      await service.computeStartDateUsingOrder(order.userId, order);
-
-      expect(order.starts).toBeInstanceOf(Date);
-      expect(Math.round(order.starts.getTime() / 1000)).toEqual(
-        Math.round(Date.now() / 1000),
+      const starts = await service.computeStartDateUsingOrder(
+        order.userId,
+        order,
       );
+
+      expect(starts).toBeInstanceOf(Date);
+      expectDatesEqualInSeconds(starts, new Date());
     });
   });
   describe("calculateExpiryDate", () => {
@@ -444,74 +456,6 @@ describe("BaseService", () => {
       expect(() => service.calculateExpiryDate(order)).toThrowError(
         "Invalid or missing cycle value",
       );
-    });
-  });
-  describe("updateOfferGroupTokens", () => {
-    let service: BaseServiceTest;
-    let mockUserCredits: { offers: IActivatedOffer[]; userId: string };
-    let mockOrder: ITokenHolder;
-    let mockExpirySpecs: IExpiryDateComputeInput<string>;
-
-    beforeEach(() => {
-      service = new BaseServiceTest(new MockDaoFactory());
-      mockUserCredits = {
-        offers: [],
-        userId: "mockUserId",
-      };
-
-      mockOrder = {
-        offerGroup: "testOfferGroup",
-        quantity: 2,
-        tokenCount: 10,
-      };
-
-      mockExpirySpecs = {
-        cycle: "daily",
-        quantity: 2,
-        starts: new Date(),
-      } as unknown as IExpiryDateComputeInput<string>;
-    });
-
-    test("updates existing offer group", () => {
-      // Add an existing offer to user credits
-      const existingOffer = {
-        expires: new Date(),
-        offerGroup: mockOrder.offerGroup,
-        tokens: 5,
-      } as IActivatedOffer;
-      mockUserCredits.offers.push(existingOffer);
-      const expiryDate = service.calculateExpiryDate(mockExpirySpecs);
-      mockExpirySpecs.expires = expiryDate;
-      const updatedOffer = service.updateOfferGroupTokens(
-        mockOrder,
-        mockUserCredits as unknown as IUserCredits<string>,
-        mockExpirySpecs,
-      );
-
-      // Assertions
-      expect(updatedOffer).toBeDefined();
-      expect(updatedOffer).toBe(existingOffer);
-      expect(updatedOffer.expires).toEqual(expiryDate);
-      expect(updatedOffer.tokens).toEqual(5 + 2 * 10);
-    });
-
-    test("adds new offer group", () => {
-      const expiryDate = service.calculateExpiryDate(mockExpirySpecs);
-      mockExpirySpecs.expires = expiryDate;
-      const updatedOffer = service.updateOfferGroupTokens(
-        mockOrder,
-        mockUserCredits as unknown as IUserCredits<string>,
-        mockExpirySpecs,
-      );
-
-      // Assertions
-      expect(updatedOffer).toBeDefined();
-      expect(updatedOffer.expires).toEqual(expiryDate);
-      expect(updatedOffer.tokens).toEqual(mockOrder.tokenCount);
-
-      // Check if the new offer is added to user credits
-      expect(mockUserCredits.offers).toHaveLength(1);
-      expect(mockUserCredits.offers[0]).toBe(updatedOffer);
     });
   });
 
@@ -704,60 +648,4 @@ describe("BaseService", () => {
       });
     });
   });
-
-  // describe("updateOfferGroupTokens", () => {
-  //   let service: BaseServiceTest;
-  //   let mockUserCredits: { offers: any[]; userId: string };
-  //   let mockOrder: ITokenHolder;
-  //   let mockExpirySpecs: IExpiryDateComputeInput<string>;
-  //
-  //   beforeEach(() => {
-  //     service = new BaseServiceTest(new MockDaoFactory());
-  //     mockUserCredits = {
-  //       offers: [],
-  //       userId: "mockUserId",
-  //     };
-  //
-  //     mockOrder = {
-  //       offerGroup: "testOfferGroup",
-  //       quantity: 2,
-  //       tokenCount: 10,
-  //     };
-  //
-  //     mockExpirySpecs = {
-  //       cycle: "daily",
-  //       quantity: 2,
-  //       starts: new Date(),
-  //     } as unknown as IExpiryDateComputeInput<string>;
-  //   });
-  //   test("handles order date and tokens", async () => {
-  //     // Mock necessary methods
-  //     service.computeStartDate = jest.fn().mockResolvedValue(new Date());
-  //     service.updateOfferGroupTokens = jest.fn().mockResolvedValue({
-  //       // Set properties as needed
-  //     });
-  //
-  //     // Call the method
-  //     const result = await service.updateOrderDateAndTokens(
-  //       mockOrder.userId,
-  //       mockOrder,
-  //       mockUserCredits,
-  //     );
-  //
-  //     // Assertions
-  //     expect(result).toBeDefined();
-  //     // Add assertions based on your specific logic and expectations
-  //
-  //     // Check if computeStartDate and updateOfferGroupTokens were called
-  //     expect(service.computeStartDate).toHaveBeenCalledWith(
-  //       mockOrder.userId,
-  //       expect.anything(), // Specify the expected orderItemSpec or use expect.anything()
-  //     );
-  //     expect(service.updateOfferGroupTokens).toHaveBeenCalledWith(
-  //       expect.anything(), // Specify the expected orderItemSpec or use expect.anything()
-  //       mockUserCredits,
-  //       expect.anything(), // Specify the expected expirySpecs or use expect.anything()
-  //     );
-  //   });
-  // });
 });
