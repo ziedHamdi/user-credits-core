@@ -11,6 +11,7 @@ import { ICombinedOrder } from "../db/model/combine/ICombinedOrder";
 import { IOfferCycle } from "../db/model/IOffer";
 import type {
   IActivatedOffer,
+  ICombinedOffer,
   IMinimalId,
   IOffer,
   IOrder,
@@ -718,67 +719,98 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     if (combinedItems && combinedItems.length > 0) {
       order.combinedItems = order.combinedItems ?? [];
       for (const orderItemSpec of combinedItems) {
-        const offer = (await this.offerDao.findById(
-          orderItemSpec.offerId,
-        )) as IOffer<K>;
-
-        const orderComputeInput =
-          orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder;
-        if (orderComputeInput.cycle) {
-          await this.updateOrderDateAndTokens(
-            userId,
-            orderComputeInput,
-            userCredits,
-            order.quantity,
-          );
-        } else {
-          orderComputeInput.starts = mainOfferGroupInUserCredits.starts;
-          orderComputeInput.expires = mainOfferGroupInUserCredits.expires;
-          this.updateOfferGroupTokens(
-            orderComputeInput,
-            userCredits,
-            orderComputeInput,
-            order.quantity,
-          );
-        }
-
-        // the tokens, start, and expiry dates are by now computed and stored in userCredits.offers, read them back to insert nested orders
-        const computed = userCredits.offers?.find(
-          (offer) => offer.offerGroup === orderItemSpec.offerGroup,
-        );
-
-        // save the order with its parent id and the computed tokenCount, starts and expiry dates
-        const nested = {
-          cycle: offer.cycle,
-          expires: computed?.expires,
-          offerGroup: orderItemSpec.offerGroup,
-          offerId: orderItemSpec.offerId,
-          quantity: (orderItemSpec.quantity || 1) * (order.quantity || 1),
-          starts: computed?.starts,
-          tokenCount: computed?.tokens,
-        };
-        order.combinedItems.push(nested as ICombinedOrder<K>);
-
-        await this.orderDao.create({
-          ...nested,
-          currency: order.currency,
-          customCycle: offer.customCycle,
-          parentId: order._id,
-          status: "paid",
-          total: 0,
-          userId,
-        } as IOrder<K>);
-
-        // Insert credits to the user
-        await this.tokenTimetableDao.create({
-          offerGroup: orderItemSpec.offerGroup,
-          tokens: computed?.tokens,
-          userId,
-        } as ITokenTimetable<K>);
+        await this.updateNestedItemAsPaid(orderItemSpec, userCredits, order);
       }
     }
 
     return mainOfferGroupInUserCredits;
+  }
+
+  protected async updateNestedItemAsPaid(
+    orderItemSpec: ICombinedOffer<K>,
+    userCredits: IUserCredits<K>,
+    rootOrder: IOrder<K>,
+  ) {
+    const offer = (await this.offerDao.findById(
+      orderItemSpec.offerId,
+    )) as IOffer<K>;
+    await this.updateNestedItemDateAndTokens(
+      offer,
+      rootOrder,
+      userCredits,
+      orderItemSpec,
+    );
+
+    // the tokens, start, and expiry dates are by now computed and stored in userCredits.offers, read them back to insert nested orders
+    const computed = userCredits.offers?.find(
+      (offer) => offer.offerGroup === orderItemSpec.offerGroup,
+    );
+
+    // save the order with its parent id and the computed tokenCount, starts and expiry dates
+    const nested = {
+      cycle: offer.cycle,
+      expires: computed?.expires,
+      offerGroup: orderItemSpec.offerGroup,
+      offerId: orderItemSpec.offerId,
+      quantity: (orderItemSpec.quantity || 1) * (rootOrder.quantity || 1),
+      starts: computed?.starts,
+      tokenCount: computed?.tokens,
+    };
+    rootOrder.combinedItems.push(nested as ICombinedOrder<K>);
+
+    await this.orderDao.create({
+      ...nested,
+      currency: rootOrder.currency,
+      customCycle: offer.customCycle,
+      parentId: rootOrder._id,
+      status: "paid",
+      total: 0,
+      userId: userCredits.userId,
+    } as IOrder<K>);
+
+    // Insert credits to the user
+    await this.tokenTimetableDao.create({
+      offerGroup: orderItemSpec.offerGroup,
+      tokens: computed?.tokens,
+      userId: userCredits.userId,
+    } as ITokenTimetable<K>);
+  }
+
+  protected async updateNestedItemDateAndTokens(
+    offer: IOffer<K>,
+    rootOrder: IOrder<K>,
+    userCredits: IUserCredits<K>,
+    orderItemSpec: ICombinedOffer<K>,
+  ) {
+    const orderComputeInput =
+      orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder;
+
+    // since we don't have an order, we emulate it by copying the tokenCount from the offer.
+    if (!orderComputeInput.tokenCount && offer.tokenCount) {
+      orderComputeInput.tokenCount = offer.tokenCount;
+    }
+
+    if (orderComputeInput.cycle) {
+      await this.updateOrderDateAndTokens(
+        userCredits.userId,
+        orderComputeInput,
+        userCredits,
+        rootOrder.quantity,
+      );
+    } else {
+      const mainOfferGroupInUserCredits = userCredits.offers.find(
+        (item) => item.offerGroup === rootOrder.offerGroup,
+      );
+
+      orderComputeInput.starts = mainOfferGroupInUserCredits!.starts;
+      orderComputeInput.expires = mainOfferGroupInUserCredits!.expires;
+      this.updateOfferGroupTokens(
+        orderComputeInput,
+        userCredits,
+        orderComputeInput,
+        rootOrder.quantity,
+      );
+    }
   }
 
   /**
