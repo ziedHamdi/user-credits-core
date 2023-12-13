@@ -649,6 +649,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       // existingSubscription.tokens += updatedOrder.tokenCount || 0;
       // Modify the offer object as needed
       // offerGroup
+
       const iActivatedOffer = (await this.updateAsPaid(
         userCredits,
         updatedOrder,
@@ -707,8 +708,16 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       userCredits,
     );
 
-    if (order.combinedItems && order.combinedItems.length > 0) {
-      for (const orderItemSpec of order.combinedItems) {
+    const offer = await this.offerDao.findById(order.offerId);
+    if (!offer) {
+      throw new InvalidOrderError(
+        "Offer with id " + order.offerId + " in order " + order._id,
+      );
+    }
+    const combinedItems = offer.combinedItems;
+    if (combinedItems && combinedItems.length > 0) {
+      order.combinedItems = order.combinedItems ?? [];
+      for (const orderItemSpec of combinedItems) {
         const offer = (await this.offerDao.findById(
           orderItemSpec.offerId,
         )) as IOffer<K>;
@@ -730,18 +739,23 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         );
 
         // save the order with its parent id and the computed tokenCount, starts and expiry dates
-        await this.orderDao.create({
-          currency: order.currency,
-          customCycle: offer.customCycle,
+        const nested = {
           cycle: offer.cycle,
           expires: computed?.expires,
           offerGroup: orderItemSpec.offerGroup,
           offerId: orderItemSpec.offerId,
-          parentId: order._id,
           quantity: (orderItemSpec.quantity || 1) * (order.quantity || 1),
           starts: computed?.starts,
-          status: "paid",
           tokenCount: computed?.tokens,
+        };
+        order.combinedItems.push(nested as ICombinedOrder<K>);
+
+        await this.orderDao.create({
+          ...nested,
+          currency: order.currency,
+          customCycle: offer.customCycle,
+          parentId: order._id,
+          status: "paid",
           total: 0,
           userId,
         } as IOrder<K>);

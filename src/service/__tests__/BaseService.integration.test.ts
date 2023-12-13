@@ -1,6 +1,7 @@
 import { IDaoFactory } from "../../db/dao/IDaoFactory";
 import {
   IActivatedOffer,
+  ICombinedOffer,
   ICombinedOrder,
   IOffer,
   IOrder,
@@ -122,14 +123,6 @@ describe("BaseService integration tests", () => {
     const now = new Date();
     const lastExpiryDateForNestedOrders = addMonths(now, 7);
 
-    const rootOfferProps = {
-      appendDate: false,
-      cycle: "weekly",
-      offerGroup: "mockHelpDesk",
-      offerId: "mockOfferId",
-      tokens: 1, // can call support once a week
-      userId: "mockUserId",
-    };
     const nestedCallsOfferProps = {
       cycle: "monthly",
       offerGroup: "calls",
@@ -144,6 +137,18 @@ describe("BaseService integration tests", () => {
       quantity: 2,
       tokenCount: 500, // 500Mb
     } as unknown as ICombinedOrder<string>;
+    const rootOfferProps = {
+      appendDate: false,
+      combinedItems: [
+        { ...nestedCallsOfferProps } as unknown as ICombinedOffer<string>,
+        { ...nestedDataOfferProps } as unknown as ICombinedOffer<string>,
+      ],
+      cycle: "weekly",
+      offerGroup: "mockHelpDesk",
+      offerId: "mockOfferId",
+      tokens: 1, // can call support once a week
+      userId: "mockUserId",
+    };
 
     let mockUserCredits: IUserCredits<string>;
     let mockOrder: IOrder<string>;
@@ -157,13 +162,13 @@ describe("BaseService integration tests", () => {
       } as unknown as IUserCredits<string>;
 
       mockOrder = {
+        ...rootOfferProps,
         _id: "mockOrderId",
         combinedItems: [
           { _id: "mockCallsNestedId", ...nestedCallsOfferProps },
           { _id: "mockDataNestedId", ...nestedDataOfferProps },
         ],
         currency: "$",
-        ...rootOfferProps,
         quantity: 2,
         tokenCount: rootOfferProps.tokens,
         tokens: undefined,
