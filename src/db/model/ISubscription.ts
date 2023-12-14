@@ -10,7 +10,7 @@ export interface ISubscription<K extends IMinimalId> extends IBaseEntity<K> {
   /**
    * The used currency for the order
    */
-  currency: string;
+  currency?: string;
   /**
    * The custom cycle duration in seconds, only applicable when cycle is 'custom'.
    */

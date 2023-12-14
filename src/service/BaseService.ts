@@ -458,54 +458,87 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     order: IOrder<K>,
     userId: K,
   ) {
+    const subscriptionList: ISubscription<K>[] = this.buildSubscriptionList(
+      offer,
+      order,
+    );
     if (!userCredits) {
-      const subscription: Partial<ISubscription<K>> = this.buildSubscription(
-        offer,
-        order,
-      );
       userCredits = await this.userCreditsDao.build({
-        subscriptions: [subscription],
+        subscriptions: subscriptionList,
         userId,
       });
     } else {
-      // Check if a subscription with the same orderId exists
-      const existingSubscription = userCredits.subscriptions.find(
-        (subscription) => subscription.orderId === order._id,
-      );
-
-      if (existingSubscription) {
-        // Update the existing subscription
-        existingSubscription.status = order.status;
-        existingSubscription.starts = order.updatedAt;
-      } else {
-        // Create a new subscription and add it to the array
-        const newSubscription: Partial<ISubscription<K>> =
-          this.buildSubscription(offer, order);
-
-        userCredits.subscriptions.push(
-          newSubscription as unknown as ISubscription<K>,
+      for (const subscription of subscriptionList) {
+        // Check if a subscription with the same orderId exists
+        subscription.status = order.status;
+        subscription.starts = order.updatedAt;
+        const existingSubscription = userCredits.subscriptions.find(
+          (ucSubscription) =>
+            ucSubscription.orderId === order._id &&
+            ucSubscription.offerId === subscription.offerId,
         );
+        if (existingSubscription) {
+          // Update the existing subscription
+          existingSubscription.status = subscription.status;
+          existingSubscription.starts = subscription.starts;
+        } else {
+          userCredits.subscriptions.push(
+            subscription as unknown as ISubscription<K>,
+          );
+        }
       }
     }
     return userCredits;
   }
 
-  protected buildSubscription(offer: IOffer<K>, order: IOrder<K>) {
-    return {
+  protected buildSubscriptionList(offer: IOffer<K>, order: IOrder<K>) {
+    const toReturn: ISubscription<K>[] = [];
+    if (offer.combinedItems) {
+      for (const offerItem of offer.combinedItems) {
+        const combinedOrder = order
+          ? order.combinedItems.find(
+              (item) => item.offerGroup === offerItem.offerGroup,
+            )
+          : null;
+        const quantity = (order.quantity || 1) * (combinedOrder?.quantity || 1);
+        // this avoids loading the offer from database
+        const offerTokenCount = combinedOrder?.tokenCount
+          ? combinedOrder?.tokenCount / (order.quantity || 1)
+          : undefined;
+        toReturn.push({
+          // currency: order.currency,
+          customCycle: offerItem.customCycle,
+          cycle: offerItem.cycle,
+          expires: combinedOrder?.expires ?? order.expires,
+          name: offerItem.offerGroup,
+          offerGroup: offerItem.offerGroup,
+          offerId: offerItem.offerId,
+          orderId: order._id,
+          quantity,
+          starts: combinedOrder?.starts,
+          status: "pending",
+          tokens: offerTokenCount,
+          total: 0,
+        } as unknown as ISubscription<K>);
+      }
+    }
+    toReturn.push({
       currency: order.currency,
       customCycle: offer.customCycle,
       cycle: offer.cycle,
-      expired: order.expires,
+      expires: order.expires,
       name: offer.name,
       offerGroup: offer.offerGroup,
       offerId: order.offerId,
       orderId: order._id,
-      quantity: order.quantity,
+      quantity: order.quantity || 1,
       starts: order.createdAt,
       status: "pending",
       tokens: offer.tokenCount,
       total: order.total,
-    } as unknown as ISubscription<K>;
+    } as unknown as ISubscription<K>);
+
+    return toReturn;
   }
 
   protected async getUserCredits(userId: K): Promise<IUserCredits<K>> {
@@ -627,22 +660,22 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     userCredits: IUserCredits<K>,
     updatedOrder: IOrder<K>,
   ): Promise<IActivatedOffer | null> {
-    const existingSubscription: ISubscription<K> =
-      userCredits.subscriptions.find((subscription) =>
-        this.equals(subscription.orderId, updatedOrder._id),
-      ) as ISubscription<K>;
-
-    if (!existingSubscription) {
-      throw new PaymentError(
-        `Illegal state: userCredits(${
-          userCredits._id
-        }) has no subscription for orderId (${
-          updatedOrder._id
-        }). Found subscriptions: ${JSON.stringify(userCredits.subscriptions)}`,
-      );
+    let offer = await this.offerDao.findById(updatedOrder.offerId);
+    if (!offer) {
+      // this is in case the offer was deleted meanwhile, not properly handled for now
+      offer = {
+        ...updatedOrder,
+      } as unknown as IOffer<K>;
+      if (updatedOrder.tokenCount) {
+        offer.tokenCount = updatedOrder.tokenCount / updatedOrder.quantity;
+      }
     }
-
-    existingSubscription.status = updatedOrder.status;
+    await this.updateSubscriptionsOnOrderChange(
+      userCredits,
+      offer,
+      updatedOrder,
+      userCredits.userId,
+    );
 
     if (updatedOrder.status === "paid") {
       // Payment was successful, increment the user's offer tokens
@@ -656,9 +689,6 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       )) as IActivatedOffer;
 
       // these will be saved by the caller
-      existingSubscription.starts = updatedOrder.starts;
-      existingSubscription.expires = updatedOrder.expires;
-
       if (updatedOrder.tokenCount) {
         const tokenTimetableDao = this.getDaoFactory().getTokenTimetableDao();
         await tokenTimetableDao.create({
