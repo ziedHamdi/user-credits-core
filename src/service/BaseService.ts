@@ -474,8 +474,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         subscription.starts = order.updatedAt;
         const existingSubscription = userCredits.subscriptions.find(
           (ucSubscription) =>
-            ucSubscription.orderId === order._id &&
-            ucSubscription.offerId === subscription.offerId,
+            ucSubscription.orderId.toString() === order._id.toString() &&
+            ucSubscription.offerId.toString() ===
+              subscription.offerId.toString(),
         );
         if (existingSubscription) {
           // Update the existing subscription
@@ -496,7 +497,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     if (offer.combinedItems) {
       for (const offerItem of offer.combinedItems) {
         const combinedOrder = order
-          ? order.combinedItems.find(
+          ? order.combinedItems?.find(
               (item) => item.offerGroup === offerItem.offerGroup,
             )
           : null;
@@ -730,22 +731,22 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     userCredits: IUserCredits<K>,
     order: IOrder<K>,
   ): Promise<IActivatedOffer> {
-    const starts = await this.computeStartDate(
+    order.starts = await this.computeStartDate(
       order as unknown as IExpiryDateComputeInput<K>,
     );
-    order.starts = starts;
-    const expires = this.calculateExpiryDate(
+    order.expires = this.calculateExpiryDate(
       order as unknown as IExpiryDateComputeInput<K>,
     );
-    const activeOffer = {
-      expires,
+    order.tokenCount = (order.quantity || 1) * (order.tokenCount || 0);
+    const activeOffer = this.appendOrPushActiveOffer(userCredits, {
+      expires: order.expires,
       offerGroup: order.offerGroup,
-      starts,
-      tokens: (order.quantity || 1) * (order.tokenCount || 0),
-    };
-    this.appendOrPushActiveOffer(userCredits, activeOffer);
+      starts: order.starts,
+      tokens: order.tokenCount,
+    });
 
     const offer = await this.offerDao.findById(order.offerId);
+    // IMPROVEMENT this behavior should be improved to accept lost offers, and act upon the order data
     if (!offer) {
       throw new InvalidOrderError(
         "Offer with id " + order.offerId + " in order " + order._id,
