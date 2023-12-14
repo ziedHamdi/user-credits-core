@@ -201,12 +201,13 @@ describe("BaseService integration tests", () => {
      * @param insertTokenTimeTable the function mock from the dao
      */
     function testNestedOrder(
+      userCreditsResult: IUserCredits<string>,
       combinedOrder: ICombinedOrder<string>,
       expectedStart: Date,
       insertOrder: CreateOrderSpy,
       insertTokenTimeTable: CreateTokenTimeTableSpy,
     ) {
-      const creditsGroup = mockUserCredits.offers.find(
+      const creditsGroup = userCreditsResult.offers.find(
         (offer) => offer.offerGroup === combinedOrder.offerGroup,
       )! as unknown as IActivatedOffer;
       expect(creditsGroup).toBeDefined();
@@ -222,7 +223,9 @@ describe("BaseService integration tests", () => {
       })! as unknown as [IOrder<string>];
       expect(insertedCallsOrder.starts).toEqual(creditsGroup.starts);
       expect(insertedCallsOrder.expires).toEqual(creditsGroup.expires);
-      expect(insertedCallsOrder.tokenCount).toEqual(creditsGroup.tokens);
+      expect(insertedCallsOrder.tokenCount! + 1000).toEqual(
+        creditsGroup.tokens,
+      );
 
       const [insertedCallsTokenTimeTable] =
         insertTokenTimeTable.mock.calls.find(([createCall]) => {
@@ -232,9 +235,10 @@ describe("BaseService integration tests", () => {
       expect(insertedCallsTokenTimeTable).toEqual(
         expect.objectContaining({
           tokens:
+            1000 +
             mockOrder.quantity *
-            combinedOrder.quantity *
-            combinedOrder.tokenCount,
+              combinedOrder.quantity *
+              combinedOrder.tokenCount,
           userId: mockOrder.userId,
         }),
       );
@@ -263,7 +267,17 @@ describe("BaseService integration tests", () => {
           "create",
         ) as CreateTokenTimeTableSpy;
         // Call the method
-        const userCreditsResult = { ...mockUserCredits };
+        const userCreditsResult = {
+          ...mockUserCredits,
+          offers: [
+            {
+              expires: addDays(now, 3),
+              offerGroup: "calls",
+              starts: addDays(now, -12),
+              tokens: 1000,
+            } as IActivatedOffer,
+          ],
+        };
         const result = await service.updateAsPaid(userCreditsResult, mockOrder);
 
         // Assertions
@@ -310,7 +324,7 @@ describe("BaseService integration tests", () => {
         // Check the calls to orderDao.find
         expect(findOfferByIdMock).toHaveBeenCalledWith(mockOrder.offerId);
 
-        const helpDeskGroup = mockUserCredits.offers.find(
+        const helpDeskGroup = userCreditsResult.offers.find(
           (offer) => offer.offerGroup === "mockHelpDesk",
         )!;
         expect(helpDeskGroup).toBeDefined();
@@ -322,13 +336,14 @@ describe("BaseService integration tests", () => {
         );
 
         testNestedOrder(
+          userCreditsResult,
           nestedCallsOfferProps,
           lastExpiryDateForNestedOrders,
           insertOrder,
           insertTokenTimeTable,
         );
 
-        const creditsDataGroup = mockUserCredits.offers.find(
+        const creditsDataGroup = userCreditsResult.offers.find(
           (offer) => offer.offerGroup === nestedDataOfferProps.offerGroup,
         )! as unknown as IActivatedOffer;
         expect(creditsDataGroup).toBeDefined();
@@ -346,14 +361,15 @@ describe("BaseService integration tests", () => {
           mockOrder.quantity * rootOfferProps.tokens,
         );
 
-        const aiTokens = userCreditsResult.offers.find(
-          (item) => item.offerGroup === "calls",
+        const callsTokens = userCreditsResult.offers.find(
+          (item) => item.offerGroup === nestedCallsOfferProps.offerGroup,
         );
-        expect(aiTokens).toBeDefined();
-        expect(aiTokens!.tokens).toEqual(
-          mockOrder.quantity *
-            nestedCallsOfferProps.quantity *
-            nestedCallsOfferProps.tokenCount,
+        expect(callsTokens).toBeDefined();
+        expect(callsTokens!.tokens).toEqual(
+          1000 +
+            mockOrder.quantity *
+              nestedCallsOfferProps.quantity *
+              nestedCallsOfferProps.tokenCount,
         );
 
         const dataTokens = userCreditsResult.offers.find(

@@ -711,7 +711,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       expires,
       offerGroup: order.offerGroup,
       starts,
-      tokens: order.quantity * (order.tokenCount || 0),
+      tokens: (order.quantity || 1) * (order.tokenCount || 0),
     };
     this.appendOrPushActiveOffer(userCredits, activeOffer);
 
@@ -754,15 +754,19 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     );
 
     // save the order with its parent id and the computed tokenCount, starts and expiry dates
+    const quantity = (orderItemSpec.quantity || 1) * (rootOrder.quantity || 1);
     const nested = {
       cycle: offer.cycle,
       expires: computed?.expires,
       offerGroup: orderItemSpec.offerGroup,
       offerId: orderItemSpec.offerId,
-      quantity: (orderItemSpec.quantity || 1) * (rootOrder.quantity || 1),
+      quantity,
       starts: computed?.starts,
-      tokenCount: computed?.tokens,
+      tokenCount: 0,
     };
+    if (offer.tokenCount) {
+      nested.tokenCount = offer.tokenCount * quantity;
+    }
     rootOrder.combinedItems.push(nested as ICombinedOrder<K>);
 
     await this.orderDao.create({
@@ -778,7 +782,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     // Insert credits to the user
     await this.tokenTimetableDao.create({
       offerGroup: orderItemSpec.offerGroup,
-      tokens: computed?.tokens,
+      tokens: (offer.tokenCount || 0) * quantity,
       userId: userCredits.userId,
     } as ITokenTimetable<K>);
   }
@@ -788,7 +792,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     rootOrder: IOrder<K>,
     userCredits: IUserCredits<K>,
     orderItemSpec: ICombinedOffer<K>,
-  ) {
+  ): Promise<IActivatedOffer> {
     const orderComputeInput =
       orderItemSpec as unknown as IExpiryDateComputeInput<K> & ITokenHolder;
 
@@ -818,18 +822,18 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       offerGroup: orderItemSpec.offerGroup,
       starts,
       tokens:
-        rootOrder.quantity *
-        orderComputeInput.quantity *
-        orderComputeInput.tokenCount,
+        (rootOrder.quantity || 1) *
+        (orderComputeInput.quantity || 1) *
+        (orderComputeInput.tokenCount || 0),
     };
 
-    this.appendOrPushActiveOffer(userCredits, activeOffer);
+    return this.appendOrPushActiveOffer(userCredits, activeOffer);
   }
 
   protected appendOrPushActiveOffer(
     userCredits: IUserCredits<K>,
     activeOffer: IActivatedOffer,
-  ) {
+  ): IActivatedOffer {
     const found = userCredits.offers.find(
       (offer) => offer.offerGroup === activeOffer.offerGroup,
     );
@@ -839,8 +843,10 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       if (found.tokens) {
         if (activeOffer.tokens) found.tokens += activeOffer.tokens;
       }
+      return found;
     } else {
       userCredits.offers.push(activeOffer);
+      return activeOffer;
     }
   }
 }
