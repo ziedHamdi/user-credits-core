@@ -195,6 +195,7 @@ describe("BaseService integration tests", () => {
     /**
      * Tests if orders and tokenTimeTables lines were correctly inserted if the parent order has nested suborders (is a combined one),
      * it also checks if the passed {@link mockUserCredits} has changed as expected (reading the data from the mocks)
+     * @param userCreditsResult the object to test against
      * @param combinedOrder the nested order
      * @param expectedStart now if appendDate is false, and the date of the last order for the offer group: mocked to lastExpiryDateForNestedOrders if true
      * @param insertOrder the function mock from the dao
@@ -214,7 +215,10 @@ describe("BaseService integration tests", () => {
       expectDatesEqualInSeconds(creditsGroup.starts, expectedStart);
       expectDatesEqualInSeconds(
         creditsGroup.expires,
-        addMonths(expectedStart, mockOrder.quantity * combinedOrder.quantity),
+        addMonths(
+          expectedStart,
+          (mockOrder.quantity || 1) * combinedOrder.quantity,
+        ),
       );
 
       const [insertedCallsOrder] = insertOrder.mock.calls.find(([call]) => {
@@ -223,8 +227,8 @@ describe("BaseService integration tests", () => {
       })! as unknown as [IOrder<string>];
       expect(insertedCallsOrder.starts).toEqual(creditsGroup.starts);
       expect(insertedCallsOrder.expires).toEqual(creditsGroup.expires);
-      expect(insertedCallsOrder.tokenCount! + 1000).toEqual(
-        creditsGroup.tokens,
+      expect(insertedCallsOrder.tokenCount).toEqual(
+        creditsGroup.tokens! - 1000,
       );
 
       const [insertedCallsTokenTimeTable] =
@@ -235,10 +239,9 @@ describe("BaseService integration tests", () => {
       expect(insertedCallsTokenTimeTable).toEqual(
         expect.objectContaining({
           tokens:
-            1000 +
-            mockOrder.quantity *
-              combinedOrder.quantity *
-              combinedOrder.tokenCount,
+            (mockOrder.quantity || 1) *
+            combinedOrder.quantity *
+            combinedOrder.tokenCount,
           userId: mockOrder.userId,
         }),
       );
