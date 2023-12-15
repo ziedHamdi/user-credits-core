@@ -126,6 +126,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     } as IOrder<K>)) as IOrder<K>;
 
     await this.prefillCombinedOrders(offer, offerId, order);
+    // add Combined Orders to subscriptions here
     await this.onOrderChange(userId, order, offer);
 
     return order;
