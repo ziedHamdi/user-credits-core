@@ -82,6 +82,13 @@ class BaseServiceIntegrationTest extends BaseService<string> {
   ): Promise<IActivatedOffer> {
     return super.updateAsPaid(userCredits, order);
   }
+
+  async updateCredits(
+    userCredits: IUserCredits<string>,
+    updatedOrder: IOrder<string>,
+  ): Promise<IActivatedOffer | null> {
+    return super.updateCredits(userCredits, updatedOrder);
+  }
 }
 
 function roundTimeToSecond(date: Date) {
@@ -149,16 +156,14 @@ describe("BaseService integration tests", () => {
     beforeEach(() => {
       mockUserCredits = {
         offers: [],
+        subscriptions: [],
         userId: "mockUserId",
       } as unknown as IUserCredits<string>;
 
       mockOrder = {
         ...rootOfferProps,
         _id: "mockOrderId",
-        combinedItems: [
-          { _id: "mockCallsNestedId", ...nestedCallsOfferProps },
-          { _id: "mockDataNestedId", ...nestedDataOfferProps },
-        ],
+        combinedItems: [],
         currency: "$",
         quantity: 2,
         tokenCount: rootOfferProps.tokens,
@@ -387,6 +392,51 @@ describe("BaseService integration tests", () => {
 
         // Restore the original method to avoid interference with other tests
         jest.restoreAllMocks();
+      },
+      1000 * 60,
+    );
+
+    test(
+      "updateCredits with combined items typical case",
+      async () => {
+        // Mock the specific call to orderDao.find
+        const findOrderListMock = jest
+          .fn()
+          .mockResolvedValue(findOrderListMockValue);
+
+        // Mock the orderDao.find method
+        service.offerDaoProp.findById = findOfferByIdMock;
+        service.orderDaoProp.find = findOrderListMock;
+        // spy on nested functions
+        // const buildSubscriptionListSpy = jest.spyOn(
+        //   service,
+        //   "buildSubscriptionList",
+        // );
+
+        // Act
+        const paidOrderMock = {
+          ...mockOrder,
+          status: "paid",
+        } as IOrder<string>;
+        await service.updateCredits(mockUserCredits, paidOrderMock);
+
+        expect(mockUserCredits.subscriptions).toBeDefined();
+        expect(mockUserCredits.subscriptions.length).toEqual(3);
+
+        const subscription0 = mockUserCredits.subscriptions[0];
+        expect(subscription0.expires).toBeDefined();
+        expect(subscription0.starts).toBeDefined();
+        expect(subscription0.status).toEqual("paid");
+
+        const subscription1 = mockUserCredits.subscriptions[1];
+        expect(subscription1.expires).toBeDefined();
+        expect(subscription1.starts).toBeDefined();
+        expect(subscription1.status).toEqual("paid");
+
+        const subscription2 = mockUserCredits.subscriptions[2];
+        expect(subscription2.expires).toBeDefined();
+        expect(subscription2.starts).toBeDefined();
+        expect(subscription2.status).toEqual("paid");
       },
       1000 * 60,
     );

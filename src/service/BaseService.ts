@@ -471,7 +471,6 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       for (const subscription of subscriptionList) {
         // Check if a subscription with the same orderId exists
         subscription.status = order.status;
-        subscription.starts = order.updatedAt;
         const existingSubscription = userCredits.subscriptions.find(
           (ucSubscription) =>
             ucSubscription.orderId.toString() === order._id.toString() &&
@@ -480,8 +479,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         );
         if (existingSubscription) {
           // Update the existing subscription
-          existingSubscription.status = subscription.status;
+          existingSubscription.expires = subscription.expires;
           existingSubscription.starts = subscription.starts;
+          existingSubscription.status = subscription.status;
         } else {
           userCredits.subscriptions.push(
             subscription as unknown as ISubscription<K>,
@@ -507,16 +507,16 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           ? combinedOrder?.tokenCount / (order.quantity || 1)
           : undefined;
         toReturn.push({
-          // currency: order.currency,
-          customCycle: offerItem.customCycle,
-          cycle: offerItem.cycle,
+          currency: order.currency,
+          customCycle: offerItem.customCycle ?? offer.customCycle,
+          cycle: offerItem.cycle ?? offer.cycle,
           expires: combinedOrder?.expires ?? order.expires,
           name: offerItem.offerGroup,
           offerGroup: offerItem.offerGroup,
           offerId: offerItem.offerId,
           orderId: order._id,
           quantity,
-          starts: combinedOrder?.starts,
+          starts: combinedOrder?.starts ?? order.starts,
           status: "pending",
           tokens: offerTokenCount,
           total: 0,
@@ -533,7 +533,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
       offerId: order.offerId,
       orderId: order._id,
       quantity: order.quantity || 1,
-      starts: order.createdAt,
+      starts: order.starts,
       status: "pending",
       tokens: offer.tokenCount,
       total: order.total,
@@ -671,20 +671,14 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
         offer.tokenCount = updatedOrder.tokenCount / updatedOrder.quantity;
       }
     }
-    await this.updateSubscriptionsOnOrderChange(
-      userCredits,
-      offer,
-      updatedOrder,
-      userCredits.userId,
-    );
-
+    let iActivatedOffer = null;
     if (updatedOrder.status === "paid") {
       // Payment was successful, increment the user's offer tokens
       // existingSubscription.tokens += updatedOrder.tokenCount || 0;
       // Modify the offer object as needed
       // offerGroup
 
-      const iActivatedOffer = (await this.updateAsPaid(
+      iActivatedOffer = (await this.updateAsPaid(
         userCredits,
         updatedOrder,
       )) as IActivatedOffer;
@@ -698,11 +692,17 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
           userId: userCredits.userId,
         } as Partial<ITokenTimetable<K>>);
       }
-
-      return iActivatedOffer;
     }
 
-    return null;
+    // has to be done after expiry date ahs been computed
+    await this.updateSubscriptionsOnOrderChange(
+      userCredits,
+      offer,
+      updatedOrder,
+      userCredits.userId,
+    );
+
+    return iActivatedOffer;
   }
 
   /**
