@@ -617,6 +617,7 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
 
     const offer = await this.offerDao.findById(order.offerId);
 
+    if (!offer) console.error("Order related offerId not found: ", order);
     // volatile offers are safely handled here
     const appendDate = offer?.appendDate ?? false;
     if (!appendDate) {
@@ -836,7 +837,9 @@ export abstract class BaseService<K extends IMinimalId> implements IService<K> {
     let starts;
     let expires;
 
-    if (orderComputeInput.cycle) {
+    if (offer.appendDate) {
+      orderComputeInput.cycle = orderComputeInput.cycle ?? offer.cycle;
+      orderComputeInput.userId = rootOrder.userId;
       starts = await this.computeStartDate(orderComputeInput);
       expires = this.calculateExpiryDate(
         { ...orderComputeInput, starts },
