@@ -2,7 +2,7 @@
   "name": "@user-credits/core",
   "author": "Zied Hamdi",
   "type": "module",
-  "version": "1.0.4-beta",
+  "version": "1.0.5-beta",
   "license": "MIT",
   "keywords": [
     "user-credits",
