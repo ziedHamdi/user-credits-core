@@ -2,6 +2,8 @@
 import { IDaoFactory } from "../../db/dao/IDaoFactory";
 import {
   IActivatedOffer,
+  type ICombinedOffer,
+  ICombinedOrder,
   IOffer,
   IOrder,
   IUserCredits,
@@ -89,6 +91,20 @@ class BaseServiceTest extends BaseService<string> {
     offerGroup: string,
   ): Promise<number> {
     return super.processExpiredOrderGroup(userId, offerGroup);
+  }
+
+  async updateNestedItemDateAndTokens(
+    offer: IOffer<string>,
+    rootOrder: IOrder<string>,
+    userCredits: IUserCredits<string>,
+    orderItemSpec: ICombinedOffer<string>,
+  ): Promise<IActivatedOffer> {
+    return super.updateNestedItemDateAndTokens(
+      offer,
+      rootOrder,
+      userCredits,
+      orderItemSpec,
+    );
   }
 }
 
@@ -456,6 +472,39 @@ describe("BaseService", () => {
       expect(() => service.calculateExpiryDate(order)).toThrowError(
         "Invalid or missing cycle value",
       );
+    });
+    test("Checks that the user Id is filled from the order for nested items, and that the query has the right params", async () => {
+      const order = {
+        combinedItems: [
+          { offerGroup: "offerGroupC1Mock" } as ICombinedOrder<string>,
+          { offerGroup: "offerGroupC2Mock" } as ICombinedOrder<string>,
+        ],
+        offerId: "phoneCalls",
+        starts: null,
+        userId: "mockUserId",
+      } as unknown as IOrder<string>;
+
+      // Mock offer data with appendDate set to true
+      service.offerDaoProp.findById = jest.fn().mockResolvedValue({
+        _id: "phoneCalls",
+        appendDate: true,
+      } as unknown as IOffer<string>);
+
+      await service.updateNestedItemDateAndTokens(
+        { appendDate: true, cycle: "once", tokenCount: 123 } as IOffer<string>,
+        order,
+        {
+          offers: [{ offerGroup: "offerGroupC2Mock" }],
+        } as IUserCredits<string>,
+        { offerGroup: "offerGroupC2Mock" } as ICombinedOffer<string>,
+      );
+
+      expect(service.orderDaoProp.find).toHaveBeenCalledWith({
+        expires: { $exists: true },
+        offerGroup: "offerGroupC2Mock",
+        status: "paid",
+        userId: order.userId,
+      });
     });
   });
 
